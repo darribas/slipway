@@ -80,6 +80,7 @@ const result = await convert(
     from: "markdown",
     to: "revealjs",
     standalone: true,
+    "slide-level": 2,
     citeproc: true,
     "html-math-method": "katex",
     css: ["theme.css"],

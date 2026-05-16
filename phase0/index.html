@@ -306,6 +306,12 @@
         from: "markdown",
         to: "revealjs",
         standalone: true,
+        // slide-level: 2 matches Quarto's revealjs default: `#` headers
+        // become section wrappers, `##` headers become individual slides.
+        // Without this, pandoc auto-picks slide-level=1 on decks that mix
+        // direct-content `#` slides with `##` subsections, flattening
+        // everything into single horizontal slides.
+        "slide-level": 2,
         citeproc: true,
         "html-math-method": "katex",
         // highlight-style "github" is a Quarto-supplied theme, not built into
