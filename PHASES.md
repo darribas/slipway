@@ -199,6 +199,30 @@ Foundation for the rest of Phase 2 — three pane modes, file tree, image insert
 
 Known cosmetic gap (deferred to a small polish increment): Dockview's theme is currently scoped to the pane host element and applied via `prefers-color-scheme`, but the cascade doesn't always win against Dockview's own default dark styling. Result: in light-mode environments the toolbar is light while the dock chrome stays dark. Functional but visually inconsistent.
 
+### Increment 3: Inline reveal.js for offline-capable rendering
+
+Pandoc 3.9's revealjs-standalone template hardcodes `unpkg.com/reveal.js@^5/...` for the deck's CSS, JS, and plugins. Two problems with that: (1) every render is at the mercy of unpkg's resolution of `^5` at fetch time, so reveal.js can silently change behaviour between visits; (2) the app stops working offline (the spec's plane-friendly goal) because the iframe still needs network to load the slide framework.
+
+- `reveal.js@^5.2.1` added as a devDep (we resolved 5.2.0; matches pandoc 3.9's `^5/plugin/notes/notes.js`-style paths).
+- New `core/inline-assets.ts` imports the 8 files pandoc's template references (`reset.css`, `reveal.css`, `theme/white.css`, `theme/black.css`, `reveal.js`, `plugin/notes/notes.js`, `plugin/search/search.js`, `plugin/zoom/zoom.js`) via Vite's `?raw` and exports `inlineRevealAssets(html)` which rewrites every matching `<link href="…">` / `<script src="…">` into an inline `<style>` / `<script>` block, preserving the original URL in a `data-from` attribute for traceability.
+- `render.ts` runs the inliner on pandoc's output before returning it.
+- Smoke test gets a new assertion: the rendered HTML must contain no external `<link>` / `<script>` references (KaTeX excluded — see deferred items). 10/10 passing.
+- Verified end-to-end: the headless Chromium e2e, run inside this sandbox where unpkg is blocked, now shows the deck slide-by-slide with the navigation controls visible. Previously this hit `PAGE ERROR: Reveal is not defined` and rendered as a flat document.
+- Bundle cost: ~265 KB of inlined reveal.js source baked into the JS chunk (~60 KB gz). Acceptable next to the 58 MB pandoc.wasm.
+- Upgrade path: bump `reveal.js` in `package.json`, redeploy. Once the Service Worker arrives in Phase 3, this is the same "new version available — reload to apply" banner that'll surface pandoc.wasm updates.
+
+-----
+
+## Repo cleanup (deferred)
+
+Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping.
+
+- **Remove `phase0/`.** The Phase 0 prototype lives in git history; the directory is reference material that's been superseded by `app/` and the smoke test. Delete once we've validated Phase 2 is stable end-to-end.
+- **Fix Dockview light/dark theme cascade** (the increment 2 cosmetic gap). Drive the dock theme from the same CSS variables as the toolbar instead of `prefers-color-scheme` on the dock host.
+- **Inline KaTeX too.** Currently still loaded from jsdelivr. Workshop deck has no math so it's not blocking, but the offline story isn't complete without it. Trickier than reveal.js because KaTeX's CSS references font files via relative `@font-face` URLs, which would need data-URI'ing.
+- **Migrate `imago.scss` off `darken()`/`lighten()`.** Both are deprecated in Dart Sass; output is correct today but each render emits warnings.
+- **Clean up `test/` directory naming** if we add more test types (right now it's just `smoke.test.ts`; if we add unit tests, organise into `test/unit/` and `test/smoke/`).
+
 -----
 
 ## Deployment (continuous)

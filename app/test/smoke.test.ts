@@ -58,6 +58,22 @@ describe("imago workshop deck", () => {
     expect(html).toMatch(/<link[^>]*theme\.css/);
   }, 30_000);
 
+  test("inlines reveal.js — no external <link>/<script> refs left in the deck", async () => {
+    const { html } = await renderDeck(pandoc, await loadInputs());
+    // The two things that actually trigger network fetches are <link href="…">
+    // and <script src="…"> pointing at external URLs. The post-inline data-from
+    // attribute keeps the original URL for traceability and is fine.
+    const externalLinks = html.match(/<link\b[^>]*href=["']https?:\/\/[^"']+["'][^>]*>/g) ?? [];
+    const externalScripts = html.match(/<script\b[^>]*src=["']https?:\/\/[^"']+["'][^>]*>/g) ?? [];
+    // KaTeX is still loaded from a CDN in the template; we haven't inlined it
+    // (workshop deck has no math). Filter those out before asserting.
+    const remaining = [...externalLinks, ...externalScripts].filter((t) => !/katex/i.test(t));
+    expect(remaining).toEqual([]);
+    // Presence of the data-from stamp confirms the substitution actually ran
+    // (rather than pandoc's template having changed format under us).
+    expect(html).toContain('data-from="https://unpkg.com/reveal.js@^5/dist/reveal.js"');
+  }, 30_000);
+
   test("applies imago slide-class styling and column layouts", async () => {
     const { html } = await renderDeck(pandoc, await loadInputs());
     expect(html).toMatch(/class="[^"]*\bdark\b/); // .dark slide class survives

@@ -1,0 +1,13 @@
+# The app is a self-contained Vite project under app/. There should never be
+# a node_modules or package.json at the repo root; if these appear, an npm
+# command ran from the wrong directory.
+node_modules/
+package.json
+package-lock.json
+
+# Editor / OS noise
+.DS_Store
+*.log
+.vite
+.idea/
+.vscode/
