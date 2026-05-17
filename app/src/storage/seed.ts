@@ -10,7 +10,7 @@ import imagoScss from "../templates/imago-workshop/imago.scss?raw";
 import referencesBib from "../templates/imago-workshop/references.bib?raw";
 import attentionPngUrl from "../templates/imago-workshop/attention_paper.png?url";
 
-import { exists, writeBytes, writeText } from "./opfs";
+import { exists, writeBytes, writeText } from "./storage";
 
 const SEED_MARKER = ".seeded";
 
