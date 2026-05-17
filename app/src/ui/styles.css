@@ -1,0 +1,185 @@
+/* App-level styles. Component-scoped class names are prefixed `slipway-`. */
+
+:root {
+  --bg: #fafafa;
+  --bg-elev: #ffffff;
+  --bg-panel: #f0f0f0;
+  --border: #dddddd;
+  --border-strong: #bbbbbb;
+  --fg: #1a1a1a;
+  --fg-muted: #666666;
+  --accent: #24226f;
+  --accent-fg: #ffffff;
+  --warn: #f9c74f;
+  --error: #f94144;
+  --ok: #4ea870;
+  --toolbar-h: 48px;
+  --splitter-w: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1a;
+    --bg-elev: #232323;
+    --bg-panel: #2a2a2a;
+    --border: #383838;
+    --border-strong: #555555;
+    --fg: #ececec;
+    --fg-muted: #999999;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: var(--toolbar-h) 1fr;
+}
+
+/* Toolbar */
+.slipway-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.slipway-toolbar h1 {
+  margin: 0 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.slipway-toolbar h1 small { font-weight: 400; color: var(--fg-muted); margin-left: 4px; }
+
+.slipway-toolbar button,
+.slipway-toolbar select,
+.slipway-toolbar label.file-input {
+  font: inherit;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.slipway-toolbar button:hover:not(:disabled),
+.slipway-toolbar select:hover {
+  background: var(--bg-panel);
+}
+.slipway-toolbar button.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+  position: relative;
+}
+.slipway-toolbar button.primary:hover:not(:disabled) {
+  background: #1c1a55;
+}
+.slipway-toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.slipway-toolbar input[type=file] { display: none; }
+
+.slipway-toolbar .spacer { flex: 1 1 auto; }
+
+.slipway-toolbar .status {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 260px;
+}
+.slipway-toolbar .status.warn { color: var(--warn); }
+.slipway-toolbar .status.error { color: var(--error); }
+.slipway-toolbar .status.ok { color: var(--ok); }
+
+/* Stale indicator dot — small coloured pip on the Render button when the
+   editor's been modified since the last successful render. */
+.slipway-toolbar button.primary[data-stale="true"]::after {
+  content: "";
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 8px; height: 8px;
+  background: var(--warn);
+  border-radius: 50%;
+}
+
+/* Panes */
+.slipway-panes {
+  display: grid;
+  grid-template-columns: 1fr var(--splitter-w) 1fr;
+  min-height: 0;
+}
+.slipway-editor,
+.slipway-preview {
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-elev);
+  display: flex;
+  flex-direction: column;
+}
+.slipway-editor { border-right: 0; }
+.slipway-splitter {
+  background: var(--border);
+  cursor: col-resize;
+  user-select: none;
+}
+.slipway-splitter:hover { background: var(--border-strong); }
+
+/* Preview */
+.slipway-preview { background: var(--bg-panel); position: relative; }
+.slipway-preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+.slipway-preview-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.slipway-preview-placeholder h2 { margin: 0 0 0.5em; font-size: 16px; font-weight: 500; }
+.slipway-preview-placeholder p { margin: 0; font-size: 13px; }
+kbd {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+/* Editor scroller filling its pane */
+.slipway-editor .cm-editor { flex: 1 1 auto; height: 100%; }
+
+/* Mobile / narrow: stack vertically */
+@media (max-width: 700px) {
+  .slipway-panes {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr var(--splitter-w) 1fr;
+  }
+  .slipway-splitter { cursor: row-resize; }
+}

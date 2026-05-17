@@ -1,0 +1,215 @@
+---
+title: Overview
+subtitle: _Embeddings for the rest of us_
+author: Dani Arribas-Bel, Imago, SDR-UK Data Service for Imagery
+format:
+  revealjs:
+    theme: ../assets/imago.scss
+    navigation-mode: linear
+    controls-layout: 'bottom-right'
+    center: false
+bibliography: ../assets/references.bib
+---
+
+# Imago  {.dark}
+
+Making satellite imagery
+
+[_more useful, usable, and used_]{.green}
+
+across social research and policy
+
+# Today's vibes {.dark}
+<!-- (2min) -->
+
+- [Intuition]{.hlg} behind what satellite embeddings _are_
+- A (sales) [pitch]{.hlg} for why they're cool
+- [No equations]{.hlg} (and very little technicalities)
+
+# [Disclaimer]{.hlg-green} {.dark}
+
+- This is all _rapidly_ changing
+- I'm NO computer scientist
+- I'll start abstract, bear with me, [_it'll have a point!_]{.green}
+
+# [_What_]{.hlg} are embeddings? <!-- (20min) -->
+
+A crash course
+
+## Autoencoders
+
+::: {.columns}
+
+::: {.column width="70%"}
+> _[...] neural network that is trained to attempt to copy its input to its output._
+
+@Goodfellow-et-al-2016
+:::
+
+::: {.column width="30%"}
+![Source: [Wikimedia](https://upload.wikimedia.org/wikipedia/commons/3/37/Autoencoder_schema.png)](https://upload.wikimedia.org/wikipedia/commons/3/37/Autoencoder_schema.png)
+:::
+
+:::
+
+Late 80s, early 90s.
+
+## Deep autoencoders (for imagery)
+
+::: {.columns}
+
+::: {.column width="70%"}
+
+- Within the blast radious of the deep learning revolution in the 2010s
+- Deep convolutional AE, ViT [@50650], MAE [@he2022masked]
+- AEs start being pre-trained (the **P** in "ChatGPT"!)
+
+:::
+
+::: {.column width="30%"}
+
+![](../assets/attention_paper.png)
+
+:::
+
+:::
+
+## Foundation models
+
+- Self-supervised[^4]
+- Pre-train once, fine-tune _downstream_ many times[^5]
+- Rising interest in Remote Sensing/Earth Observation [@rolf2024missioncriticalsatellite]
+
+All the rage in 2020s (and partially why embeddings are so hot now)
+
+[^4]: _"Life's too short for labels!"_
+[^5]: _"Life's too short from training from scratch every time!"_
+
+## (Geo-)Embeddings
+
+::: {.columns}
+
+::: {.column width="30%"}
+![Source: [Wikimedia](https://upload.wikimedia.org/wikipedia/commons/3/37/Autoencoder_schema.png)](https://upload.wikimedia.org/wikipedia/commons/3/37/Autoencoder_schema.png)
+:::
+
+::: {.column width="70%"}
+- [Dense, compressed vectors]{.blue} that retain statistical information of the input image
+- Neural nets' [internal representation]{.blue} of an image
+- "How computers [_see_]{.blue} an image"
+:::
+
+:::
+
+
+# [_Why_]{.hlg} should I care? <!-- (15min) -->
+
+## Step back for a second
+
+The year is 2026...
+
+:::{.incremental}
+- We [need]{.hlg} more [data]{.hlg} more than ever!
+- We [have]{.hlg} more [data]{.hlg} than ever!
+- But... "Mo Data, Mo Problems"?
+:::
+
+## Embeddings' promise [@klemmer2025earthembeddings]
+
+1. Dimensionality reduction/compression
+1. Data fusion
+1. Interpolation across unseen data
+1. Interoperability across modalities
+
+## Embeddings' promise
+
+1. Imagery _as spreadsheets!_
+1. Imagery that _fits in your laptop_[^1]
+1. Imagery that talks to other imagery (and other kind of data!)
+
+[^1]: Kind of...
+
+# Thanks! {.dark}
+
+[[Dani Arribas-Bel]{.grey}](https://darribas.org)
+
+[Imago, SDR-UK Data Service for Imagery]{.green}
+
+[[`imago.ac.uk`]{.orange}](https://imago.ac.uk)
+
+[🏠](../Materials.html)
+
+# Appendix 
+
+## Challenges - _But..._
+
+## But... [[technical challenges]]{.blue}
+
+Building embeddings is still...
+
+- ... non-[trivial]{.green}
+- ... non-[cheap]{.green}
+- ... non-[transferrable]{.green}/[comparable]{.green}
+
+## BUT... [[conceptual challenges]]{.blue}
+
+- What's the best[^2] [_scale_]{.green}?
+- Are we still leaving in a world of [_pixels_]{.green}?
+- _What do they even [mean]{.green}_?
+
+[^2]: "Heavily loaded term" trigger warning!!!
+
+
+
+## [_Which_]{.hlg} embeddings?
+<!-- (10min) -->
+
+An (early 2026) _brief_ overview
+
+## Models
+
+## Models
+
+_Very_ flexible, the sky is the limit!
+
+- Space, time, space-time
+- Single source, multi-sensor
+- Multi-modal
+
+A (very biased) illustration...
+
+## Models
+
+Industry:
+
+- IBM/NASA Prithvi [@szwarcman2025prithvieo20versatilemultitemporalfoundation]
+- IBM/ESA TerraMind [@jakubik2025terramindlargescalegenerativemultimodality]
+- Google AlphaEarth* [@brown2025alphaearthfoundationsembeddingfield]
+- ...
+
+Academia:
+
+- TESSERA [@feng2025tesseratemporalembeddingssurface]
+- PRESTO [@tseng2024lightweightpretrainedtransformersremote], Galileo [@tseng2025galileolearningglobal]
+- ...
+
+## Embedding products[^3]
+
+- [Google AlphaEarth](https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL) (Earth Engine)
+- [GeoTESSERA](https://github.com/ucam-eo/geotessera) (Python package)
+- [ESA's Major TOM](https://huggingface.co/Major-TOM) (various products)
+
+[^3]: Keep in mind everything we said in [But](#but-technical-challenges) and [BUT](#but-conceptual-challenges)
+
+## A short reading list
+
+- @Janowicz02092025: (readable) academic overview
+- @gilman2025vectorembeddings: an industry/research pitch
+- @klemmer2025earthembeddings: an academic (CS'y) pitch
+
+# References {.scrollable}
+
+::: {#refs}
+:::
+
+
