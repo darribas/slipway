@@ -17,6 +17,7 @@ import {
   setActiveQmd,
 } from "./storage/project";
 import { exportZip, importZip } from "./storage/zip";
+import { probeCapabilities } from "./storage/opfs";
 
 const AUTOSAVE_MS = 2_000;
 
@@ -233,20 +234,70 @@ function msgOf(e: unknown): string {
   return String(e);
 }
 
-main().catch((e) => {
+main().catch(async (e) => {
   console.error("Slipway startup failed:", e);
-  const status = document.querySelector(".slipway-toolbar .status");
-  const msg = e instanceof Error ? (e.stack ?? e.message) : String(e);
-  if (status) {
-    status.textContent = `Startup failed: ${msgOf(e)}`;
-    status.className = "status error";
-    (status as HTMLElement).title = msg;
-    return;
-  }
-  // Toolbar never mounted — show a top-level error banner so the user
-  // doesn't sit on a blank page wondering what happened.
-  const div = document.createElement("div");
-  div.style.cssText = "padding:24px;margin:24px;font:14px system-ui;color:#b00;background:#fee;border:1px solid #fcc;border-radius:4px;white-space:pre-wrap";
-  div.textContent = `Slipway failed to start.\n\n${msg}`;
-  document.body.appendChild(div);
+  await showStartupError(e);
 });
+
+async function showStartupError(e: unknown): Promise<void> {
+  const message = e instanceof Error ? e.message : String(e);
+  const stack = e instanceof Error && e.stack ? e.stack : "";
+  let diag = "";
+  try {
+    const cap = await probeCapabilities();
+    diag =
+      `userAgent: ${navigator.userAgent}\n` +
+      `storage: ${cap.storage}\n` +
+      `getDirectory: ${cap.getDirectory}\n` +
+      `createWritable: ${cap.createWritable}\n` +
+      `createSyncAccessHandle: ${cap.createSyncAccessHandle}\n` +
+      `persisted: ${cap.persisted}`;
+  } catch (probeErr) {
+    diag = `(capability probe also failed: ${probeErr instanceof Error ? probeErr.message : String(probeErr)})`;
+  }
+
+  // Always render a full-width banner — the toolbar status text gets
+  // truncated by ellipsis on narrow viewports (e.g. iPad portrait), which
+  // hides the actual message.
+  const banner = document.createElement("div");
+  banner.className = "slipway-error-banner";
+  banner.innerHTML = `
+    <div class="head">
+      <strong>Slipway failed to start</strong>
+      <button class="copy" type="button">Copy details</button>
+      <button class="dismiss" type="button" aria-label="Dismiss">×</button>
+    </div>
+    <p class="msg"></p>
+    <details>
+      <summary>Diagnostics</summary>
+      <pre class="diag"></pre>
+      <pre class="stack"></pre>
+    </details>`;
+  banner.querySelector(".msg")!.textContent = message;
+  banner.querySelector(".diag")!.textContent = diag;
+  banner.querySelector(".stack")!.textContent = stack;
+  banner.querySelector(".dismiss")!.addEventListener("click", () => banner.remove());
+  banner.querySelector(".copy")!.addEventListener("click", async () => {
+    const text = `Slipway startup failure\n\n${message}\n\n--- diagnostics ---\n${diag}\n\n--- stack ---\n${stack}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      (banner.querySelector(".copy") as HTMLButtonElement).textContent = "Copied";
+    } catch {
+      // Clipboard API can fail in non-secure contexts or without user gesture.
+      // Fall back to selecting the diag block so the user can long-press copy.
+      const range = document.createRange();
+      range.selectNodeContents(banner.querySelector(".diag")!);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  });
+  document.body.insertBefore(banner, document.body.firstChild);
+
+  // Also colour-flag the status text if the toolbar managed to mount.
+  const status = document.querySelector(".slipway-toolbar .status");
+  if (status) {
+    status.textContent = "Startup failed (see banner)";
+    status.className = "status error";
+  }
+}
