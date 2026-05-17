@@ -1,5 +1,5 @@
 import type { RenderInputs } from "../core/types";
-import { listFiles, readBytes, readText, writeText } from "./opfs";
+import { listFiles, readBytes, readText, writeText } from "./storage";
 
 /**
  * The deck currently being edited. Stored in a module-level mutable so that

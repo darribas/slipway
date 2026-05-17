@@ -17,7 +17,7 @@ import {
   setActiveQmd,
 } from "./storage/project";
 import { exportZip, importZip } from "./storage/zip";
-import { probeCapabilities } from "./storage/opfs";
+import { probeCapabilities } from "./storage/storage";
 
 const AUTOSAVE_MS = 2_000;
 
@@ -247,10 +247,8 @@ async function showStartupError(e: unknown): Promise<void> {
     const cap = await probeCapabilities();
     diag =
       `userAgent: ${navigator.userAgent}\n` +
-      `storage: ${cap.storage}\n` +
-      `getDirectory: ${cap.getDirectory}\n` +
-      `createWritable: ${cap.createWritable}\n` +
-      `createSyncAccessHandle: ${cap.createSyncAccessHandle}\n` +
+      `indexedDB: ${cap.indexedDB}\n` +
+      `writable: ${cap.writable}\n` +
       `persisted: ${cap.persisted}\n` +
       `probeError: ${cap.probeError ?? "(none)"}`;
   } catch (probeErr) {

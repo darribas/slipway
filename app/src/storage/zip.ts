@@ -1,5 +1,5 @@
 import { unzipSync, zipSync, strFromU8 } from "fflate";
-import { listFiles, readBytes, writeBytes, clearRoot } from "./opfs";
+import { listFiles, readBytes, writeBytes, clearRoot } from "./storage";
 
 const TEXT_EXTENSIONS = new Set([
   "qmd", "md", "txt", "scss", "css", "bib", "csl", "yaml", "yml", "json", "svg",
