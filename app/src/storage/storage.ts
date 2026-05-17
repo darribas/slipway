@@ -125,6 +125,26 @@ export async function remove(path: string): Promise<void> {
   });
 }
 
+/**
+ * Rename a file. Treats the path as a single entry (not a directory tree —
+ * directories in our model are implicit prefixes, so renaming a "directory"
+ * means renaming each file under it; callers do that explicitly).
+ * Throws if `oldPath` doesn't exist or `newPath` already does.
+ */
+export async function rename(oldPath: string, newPath: string): Promise<void> {
+  const oldKey = normalisePath(oldPath);
+  const newKey = normalisePath(newPath);
+  if (oldKey === newKey) return;
+  await withStore("readwrite", async (store) => {
+    const data = await promisify(store.get(oldKey));
+    if (data === undefined) throw new Error(`File not found: ${oldKey}`);
+    const existing = await promisify(store.getKey(newKey));
+    if (existing !== undefined) throw new Error(`Target already exists: ${newKey}`);
+    await promisify(store.put(data, newKey));
+    await promisify(store.delete(oldKey));
+  });
+}
+
 export async function clearRoot(): Promise<void> {
   await withStore("readwrite", (store) => promisify(store.clear()));
 }

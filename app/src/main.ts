@@ -6,6 +6,7 @@ import { DockviewComponent, type IContentRenderer } from "dockview-core";
 import { mountLayout } from "./ui/layout";
 import { createEditor, type EditorHandle } from "./ui/editor";
 import { PreviewPane } from "./ui/preview";
+import { createFileTree } from "./ui/file-tree";
 
 import { getPandoc } from "./core/pandoc";
 import { renderDeck } from "./core/render";
@@ -20,7 +21,14 @@ import {
   setActiveQmd,
 } from "./storage/project";
 import { exportZip, importZip } from "./storage/zip";
-import { probeCapabilities } from "./storage/storage";
+import {
+  exists,
+  listFiles,
+  probeCapabilities,
+  remove,
+  rename,
+  writeText,
+} from "./storage/storage";
 
 const AUTOSAVE_MS = 2_000;
 
@@ -44,28 +52,31 @@ async function main(): Promise<void> {
   }
   if (wasSeeded) layout.setStatus("Seeded with imago workshop template");
 
-  await refreshFileList(layout.fileSelect);
-  const initialQmd = layout.fileSelect.value;
+  const initialQmds = await listQmds();
+  const initialQmd: string | null = initialQmds[0] ?? null;
   if (!initialQmd) {
-    layout.setStatus("No .qmd files in project — import a zip to get started", "warn");
-    return;
+    layout.setStatus("No .qmd files in project — import a zip or create one", "warn");
+  } else {
+    setActiveQmd(initialQmd);
   }
-  setActiveQmd(initialQmd);
 
-  // Build the editor and preview into their own DOM containers, then hand
-  // those containers to Dockview as panel contents. This way the editor /
-  // preview construction logic stays untouched — Dockview just hosts them.
+  // Build the editor, preview, and file-tree into their own DOM containers,
+  // then hand each one to Dockview as panel content. Dockview moves these
+  // around during dock/tab/split operations; CodeMirror, the iframe, and the
+  // tree all handle resulting size changes.
   const editorContainer = document.createElement("div");
   editorContainer.style.cssText = "height:100%;width:100%;display:flex;flex-direction:column;min-height:0";
   const previewContainer = document.createElement("div");
   previewContainer.style.cssText = "height:100%;width:100%;position:relative";
+  const filesContainer = document.createElement("div");
+  filesContainer.style.cssText = "height:100%;width:100%";
 
   const previewPane = new PreviewPane(previewContainer);
   let lastRenderedHtml: string | null = null;
 
   const editor = createEditor({
     parent: editorContainer,
-    initialDoc: await readQmd(initialQmd),
+    initialDoc: initialQmd ? await readQmd(initialQmd) : "",
     onChange: () => {
       layout.setStale(true);
       scheduleAutosave(editor);
@@ -74,10 +85,8 @@ async function main(): Promise<void> {
     onRender: () => void runRender(),
   });
 
-  // Each renderer just exposes a pre-built DOM container. Dockview moves it
-  // between groups during dock/tab/split operations; CodeMirror's
-  // EditorView.lineWrapping et al. handle the resulting size changes.
   const containerRenderers: Record<string, IContentRenderer> = {
+    files: { element: filesContainer, init: () => {} },
     editor: { element: editorContainer, init: () => {} },
     preview: { element: previewContainer, init: () => {} },
   };
@@ -88,10 +97,16 @@ async function main(): Promise<void> {
       return renderer;
     },
   });
+  const filesPanel = dock.addPanel({
+    id: "files",
+    component: "files",
+    title: "Files",
+  });
   const editorPanel = dock.addPanel({
     id: "editor",
     component: "editor",
-    title: initialQmd,
+    title: initialQmd ?? "(no file)",
+    position: { referencePanel: "files", direction: "right" },
   });
   dock.addPanel({
     id: "preview",
@@ -99,21 +114,104 @@ async function main(): Promise<void> {
     title: "Preview",
     position: { referencePanel: "editor", direction: "right" },
   });
-  // Layout the dock to its container size; resize handler keeps it in sync.
+  filesPanel.api.setSize({ width: 220 });
   const resizeDock = () => dock.layout(layout.paneHost.clientWidth, layout.paneHost.clientHeight);
   resizeDock();
   window.addEventListener("resize", resizeDock);
 
-  // File picker switches the active .qmd, autosaving the outgoing one first.
-  layout.fileSelect.addEventListener("change", async () => {
+  const fileTree = createFileTree(filesContainer, {
+    onOpen: (path) => void openFile(path),
+    onRename: async (oldPath, newPath) => {
+      try {
+        await flushAutosave(editor);
+        await rename(oldPath, newPath);
+        if (getActiveQmd() === oldPath) {
+          setActiveQmd(newPath);
+          editorPanel.api.setTitle(newPath);
+        }
+        await refreshTree();
+        layout.setStatus(`Renamed → ${newPath}`, "ok");
+      } catch (e) {
+        layout.setStatus(`Rename failed: ${msgOf(e)}`, "error");
+      }
+    },
+    onDelete: async (path) => {
+      try {
+        await remove(path);
+        if (getActiveQmd() === path) {
+          const remaining = (await listQmds()).filter((p) => p !== path);
+          if (remaining[0]) {
+            await openFile(remaining[0]);
+          } else {
+            setActiveQmd(null);
+            editor.setDoc("");
+            editorPanel.api.setTitle("(no file)");
+          }
+        }
+        await refreshTree();
+        layout.setStatus(`Deleted ${path}`, "ok");
+      } catch (e) {
+        layout.setStatus(`Delete failed: ${msgOf(e)}`, "error");
+      }
+    },
+    onCreateFile: async (parentDir, name) => {
+      const path = joinPath(parentDir, name);
+      try {
+        if (await exists(path)) {
+          layout.setStatus(`File already exists: ${path}`, "warn");
+          return;
+        }
+        await writeText(path, "");
+        await refreshTree();
+        if (path.toLowerCase().endsWith(".qmd")) await openFile(path);
+        layout.setStatus(`Created ${path}`, "ok");
+      } catch (e) {
+        layout.setStatus(`Create failed: ${msgOf(e)}`, "error");
+      }
+    },
+    onCreateFolder: async (parentDir, name) => {
+      // IDB has no real directories — we model them with a .placeholder file
+      // so the tree can render an empty folder. The placeholder is filtered
+      // out of the displayed list.
+      const placeholder = `${joinPath(parentDir, name)}/.placeholder`;
+      try {
+        await writeText(placeholder, "");
+        await refreshTree();
+        layout.setStatus(`Created folder ${joinPath(parentDir, name)}`, "ok");
+      } catch (e) {
+        layout.setStatus(`Create folder failed: ${msgOf(e)}`, "error");
+      }
+    },
+  });
+
+  async function openFile(path: string): Promise<void> {
+    if (!path.toLowerCase().endsWith(".qmd")) {
+      layout.setStatus(`${path} isn't a .qmd — open skipped`, "warn");
+      return;
+    }
     await flushAutosave(editor);
-    const path = layout.fileSelect.value;
     setActiveQmd(path);
     editor.setDoc(await readQmd(path));
     editorPanel.api.setTitle(path);
+    fileTree.setActive(path);
     layout.setStale(true);
     layout.setStatus(`Opened ${path}`);
-  });
+  }
+
+  async function refreshTree(): Promise<void> {
+    const all = await listFiles();
+    fileTree.refresh(
+      all.filter((p) => {
+        // Hide dot-prefixed filenames (.seeded marker, .placeholder folder
+        // stubs, .DS_Store leftovers from zip imports).
+        const segments = p.split("/");
+        return !segments[segments.length - 1].startsWith(".");
+      }),
+    );
+    fileTree.setActive(getActiveQmd());
+  }
+
+  await refreshTree();
 
   layout.renderBtn.addEventListener("click", () => void runRender());
 
@@ -124,16 +222,16 @@ async function main(): Promise<void> {
     try {
       const { filesWritten } = await importZip(file);
       layout.setStatus(`Imported ${filesWritten} files`, "ok");
-      await refreshFileList(layout.fileSelect);
-      const path = layout.fileSelect.value;
-      if (path) {
-        setActiveQmd(path);
-        editor.setDoc(await readQmd(path));
-        layout.setStale(true);
+      const qmds = await listQmds();
+      if (qmds[0]) {
+        await openFile(qmds[0]);
       } else {
+        setActiveQmd(null);
         editor.setDoc("");
+        editorPanel.api.setTitle("(no file)");
         layout.setStatus("Imported zip contains no .qmd files", "warn");
       }
+      await refreshTree();
     } catch (e) {
       layout.setStatus(`Import failed: ${msgOf(e)}`, "error");
     } finally {
@@ -242,15 +340,10 @@ async function saveActive(editor: EditorHandle): Promise<void> {
 
 // ---- Helpers --------------------------------------------------------------
 
-async function refreshFileList(select: HTMLSelectElement): Promise<void> {
-  const paths = await listQmds();
-  select.innerHTML = "";
-  for (const path of paths) {
-    const opt = document.createElement("option");
-    opt.value = path;
-    opt.textContent = path;
-    select.appendChild(opt);
-  }
+function joinPath(parentDir: string, name: string): string {
+  const safeName = name.replace(/^\/+/, "").replace(/\/+/g, "/");
+  if (!parentDir) return safeName;
+  return `${parentDir.replace(/\/+$/, "")}/${safeName}`;
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
