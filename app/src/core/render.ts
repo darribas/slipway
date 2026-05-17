@@ -1,5 +1,6 @@
 import { compileScss } from "./sass";
 import { preprocessDeck } from "./preprocess";
+import { inlineRevealAssets } from "./inline-assets";
 import type { PandocInstance, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
@@ -74,8 +75,13 @@ export async function renderDeck(
     else warnings.push(JSON.stringify(w));
   }
 
+  // Inline reveal.js core + plugins so the rendered deck has no external
+  // dependencies. App becomes fully offline-capable (the Phase 3 goal) and
+  // the deck stops being at the mercy of unpkg resolving `^5` at fetch time.
+  const html = inlineRevealAssets(result.stdout);
+
   return {
-    html: result.stdout,
+    html,
     warnings,
     stderr: result.stderr,
     durationMs: performance.now() - t0,
