@@ -187,6 +187,18 @@ The regression net that gates everything else in Phase 2. Before any new UI work
 
 Runs in ~9s locally. CI should finish under a minute including the npm cache restore.
 
+### Increment 2: Dockable pane layout (Dockview)
+
+Foundation for the rest of Phase 2 — three pane modes, file tree, image insertion, presenter view — all sit on top of this. Hand-rolled split grid replaced with `dockview-core` (vanilla TS, ~80 KB gz). The editor and preview are now Dockview panels with tabs, drag-to-dock, drag-to-tab, and free splitting in any direction.
+
+- `dockview-core@6.3.0` added as a dependency.
+- `layout.ts` shrank: removed the bespoke split grid + pointer-driven splitter. The pane area is now just a host div that main.ts attaches a `DockviewComponent` to.
+- `main.ts` builds the editor and preview into plain `HTMLDivElement` containers, then registers them with Dockview via the `createComponent` factory hook. Each `IContentRenderer` just exposes its pre-built container; Dockview moves it between groups during dock/tab/split operations and CodeMirror's `lineWrapping` handles the size changes.
+- Initial layout: editor panel on the left, preview panel on the right (tab title tracks the active `.qmd`). Both panels are drag-rearrangeable; resize is built in. Smoke test still 9/9, browser e2e confirms render still produces 178 KB of HTML in ~1.5 s.
+- Bundle cost: ~100 KB of Dockview CSS (9 KB gz) + ~250 KB JS (60 KB gz). Negligible next to the 58 MB pandoc.wasm.
+
+Known cosmetic gap (deferred to a small polish increment): Dockview's theme is currently scoped to the pane host element and applied via `prefers-color-scheme`, but the cascade doesn't always win against Dockview's own default dark styling. Result: in light-mode environments the toolbar is light while the dock chrome stays dark. Functional but visually inconsistent.
+
 -----
 
 ## Deployment (continuous)

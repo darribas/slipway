@@ -1,11 +1,14 @@
-// Constructs the toolbar + split-pane DOM and exposes hooks for main.ts to wire
-// up. The split pane supports horizontal dragging; on narrow viewports it
-// stacks vertically and drags vertically.
+// App chrome: toolbar across the top, Dockview-managed pane area below.
+//
+// Dockview gives us VS Code / Jupyter Lab-style tabbed panels with drag-to-
+// dock, drag-to-tab, splits in any direction, and resizable splitters — all
+// for free. main.ts mounts the editor and preview as panels into the Dockview
+// instance; this module just builds the chrome and hands main.ts the
+// container element to attach Dockview to.
 
 export interface LayoutHandle {
   toolbar: HTMLElement;
-  editorHost: HTMLElement;
-  previewHost: HTMLElement;
+  paneHost: HTMLElement; // root for the DockviewComponent
   fileSelect: HTMLSelectElement;
   renderBtn: HTMLButtonElement;
   importInput: HTMLInputElement;
@@ -39,7 +42,6 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   presentBtn.disabled = true;
   toolbar.appendChild(presentBtn);
 
-  // Import zip via a hidden file input wrapped in a label
   const importLabel = el("label", "file-input") as HTMLLabelElement;
   importLabel.textContent = "Import zip…";
   const importInput = el("input") as HTMLInputElement;
@@ -60,22 +62,16 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
 
   root.appendChild(toolbar);
 
-  // Split panes
-  const panes = el("div", "slipway-panes");
-  const editorHost = el("div", "slipway-editor");
-  const splitter = el("div", "slipway-splitter");
-  const previewHost = el("div", "slipway-preview");
-  panes.appendChild(editorHost);
-  panes.appendChild(splitter);
-  panes.appendChild(previewHost);
-  root.appendChild(panes);
-
-  attachSplitter(panes, splitter);
+  // Dockview lives in this container; main.ts attaches a DockviewComponent.
+  // Theme class is auto-toggled via prefers-color-scheme so the dock chrome
+  // tracks the app chrome.
+  const paneHost = el("div", "slipway-panes");
+  applyDockTheme(paneHost);
+  root.appendChild(paneHost);
 
   return {
     toolbar,
-    editorHost,
-    previewHost,
+    paneHost,
     fileSelect,
     renderBtn,
     importInput,
@@ -92,43 +88,18 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   };
 }
 
+function applyDockTheme(host: HTMLElement): void {
+  const apply = () => {
+    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    host.classList.toggle("dockview-theme-dark", dark);
+    host.classList.toggle("dockview-theme-light", !dark);
+  };
+  apply();
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", apply);
+}
+
 function el<T extends HTMLElement = HTMLElement>(tag: string, className?: string): T {
   const node = document.createElement(tag) as T;
   if (className) node.className = className;
   return node;
-}
-
-function attachSplitter(panes: HTMLElement, splitter: HTMLElement): void {
-  let dragging = false;
-  let isVertical = window.matchMedia("(max-width: 700px)").matches;
-  const onResize = () => {
-    isVertical = window.matchMedia("(max-width: 700px)").matches;
-  };
-  window.addEventListener("resize", onResize);
-
-  function onMove(ev: PointerEvent): void {
-    if (!dragging) return;
-    const rect = panes.getBoundingClientRect();
-    if (isVertical) {
-      const ratio = clamp((ev.clientY - rect.top) / rect.height, 0.1, 0.9);
-      panes.style.gridTemplateRows = `${ratio}fr var(--splitter-w) ${1 - ratio}fr`;
-    } else {
-      const ratio = clamp((ev.clientX - rect.left) / rect.width, 0.1, 0.9);
-      panes.style.gridTemplateColumns = `${ratio}fr var(--splitter-w) ${1 - ratio}fr`;
-    }
-  }
-  splitter.addEventListener("pointerdown", (ev) => {
-    dragging = true;
-    splitter.setPointerCapture(ev.pointerId);
-    ev.preventDefault();
-  });
-  splitter.addEventListener("pointermove", onMove);
-  splitter.addEventListener("pointerup", (ev) => {
-    dragging = false;
-    splitter.releasePointerCapture(ev.pointerId);
-  });
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
 }

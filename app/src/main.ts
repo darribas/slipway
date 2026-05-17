@@ -1,4 +1,7 @@
+import "dockview-core/dist/styles/dockview.css";
 import "./ui/styles.css";
+
+import { DockviewComponent, type IContentRenderer } from "dockview-core";
 
 import { mountLayout } from "./ui/layout";
 import { createEditor, type EditorHandle } from "./ui/editor";
@@ -49,11 +52,19 @@ async function main(): Promise<void> {
   }
   setActiveQmd(initialQmd);
 
-  const previewPane = new PreviewPane(layout.previewHost);
+  // Build the editor and preview into their own DOM containers, then hand
+  // those containers to Dockview as panel contents. This way the editor /
+  // preview construction logic stays untouched — Dockview just hosts them.
+  const editorContainer = document.createElement("div");
+  editorContainer.style.cssText = "height:100%;width:100%;display:flex;flex-direction:column;min-height:0";
+  const previewContainer = document.createElement("div");
+  previewContainer.style.cssText = "height:100%;width:100%;position:relative";
+
+  const previewPane = new PreviewPane(previewContainer);
   let lastRenderedHtml: string | null = null;
 
   const editor = createEditor({
-    parent: layout.editorHost,
+    parent: editorContainer,
     initialDoc: await readQmd(initialQmd),
     onChange: () => {
       layout.setStale(true);
@@ -63,12 +74,43 @@ async function main(): Promise<void> {
     onRender: () => void runRender(),
   });
 
+  // Each renderer just exposes a pre-built DOM container. Dockview moves it
+  // between groups during dock/tab/split operations; CodeMirror's
+  // EditorView.lineWrapping et al. handle the resulting size changes.
+  const containerRenderers: Record<string, IContentRenderer> = {
+    editor: { element: editorContainer, init: () => {} },
+    preview: { element: previewContainer, init: () => {} },
+  };
+  const dock = new DockviewComponent(layout.paneHost, {
+    createComponent: (options) => {
+      const renderer = containerRenderers[options.name];
+      if (!renderer) throw new Error(`unknown dock component: ${options.name}`);
+      return renderer;
+    },
+  });
+  const editorPanel = dock.addPanel({
+    id: "editor",
+    component: "editor",
+    title: initialQmd,
+  });
+  dock.addPanel({
+    id: "preview",
+    component: "preview",
+    title: "Preview",
+    position: { referencePanel: "editor", direction: "right" },
+  });
+  // Layout the dock to its container size; resize handler keeps it in sync.
+  const resizeDock = () => dock.layout(layout.paneHost.clientWidth, layout.paneHost.clientHeight);
+  resizeDock();
+  window.addEventListener("resize", resizeDock);
+
   // File picker switches the active .qmd, autosaving the outgoing one first.
   layout.fileSelect.addEventListener("change", async () => {
     await flushAutosave(editor);
     const path = layout.fileSelect.value;
     setActiveQmd(path);
     editor.setDoc(await readQmd(path));
+    editorPanel.api.setTitle(path);
     layout.setStale(true);
     layout.setStatus(`Opened ${path}`);
   });
