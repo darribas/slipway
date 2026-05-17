@@ -30,7 +30,14 @@ async function main(): Promise<void> {
   }
 
   layout.setStatus("Seeding project…");
-  const wasSeeded = await seedIfEmpty();
+  let wasSeeded = false;
+  try {
+    wasSeeded = await seedIfEmpty();
+  } catch (e) {
+    layout.setStatus(`Seed failed: ${msgOf(e)}`, "error");
+    console.error("seed failed:", e);
+    throw e;
+  }
   if (wasSeeded) layout.setStatus("Seeded with imago workshop template");
 
   await refreshFileList(layout.fileSelect);
@@ -135,6 +142,18 @@ async function main(): Promise<void> {
       layout.setStale(false);
       const warn = result.warnings.length ? ` (${result.warnings.length} warnings)` : "";
       layout.setStatus(`Rendered in ${Math.round(result.durationMs)}ms${warn}`, "ok");
+      // Surface warning details as a tooltip on the status text (long-press
+      // on iPad, hover on desktop). Logged to the console too so they're
+      // visible in dev tools when needed.
+      if (result.warnings.length) {
+        layout.status.title = result.warnings.join("\n");
+        console.warn("render warnings:\n" + result.warnings.join("\n"));
+      } else {
+        layout.status.title = "";
+      }
+      if (result.stderr.trim()) {
+        console.warn("render stderr:", result.stderr);
+      }
     } catch (e) {
       layout.setStatus(`Render failed: ${msgOf(e)}`, "error");
       console.error(e);
@@ -214,4 +233,20 @@ function msgOf(e: unknown): string {
   return String(e);
 }
 
-void main();
+main().catch((e) => {
+  console.error("Slipway startup failed:", e);
+  const status = document.querySelector(".slipway-toolbar .status");
+  const msg = e instanceof Error ? (e.stack ?? e.message) : String(e);
+  if (status) {
+    status.textContent = `Startup failed: ${msgOf(e)}`;
+    status.className = "status error";
+    (status as HTMLElement).title = msg;
+    return;
+  }
+  // Toolbar never mounted — show a top-level error banner so the user
+  // doesn't sit on a blank page wondering what happened.
+  const div = document.createElement("div");
+  div.style.cssText = "padding:24px;margin:24px;font:14px system-ui;color:#b00;background:#fee;border:1px solid #fcc;border-radius:4px;white-space:pre-wrap";
+  div.textContent = `Slipway failed to start.\n\n${msg}`;
+  document.body.appendChild(div);
+});

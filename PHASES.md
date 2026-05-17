@@ -161,6 +161,10 @@ npm run typecheck            # tsc --noEmit only
 - Plugin opt-in (Menu / Search / Chalkboard) per-deck via YAML — Phase 3.
 - Bundled templates beyond the imago workshop seed (imago-light, imago-dark, journal, workshop scaffold) — Phase 3.
 
+### Post-release fixes
+
+- **iPad Safari hangs on "Seeding project…"** — root cause: `FileSystemFileHandle.createWritable()` (the async OPFS write API we used everywhere) only landed in Safari 18.4 (March 2025). On older Safari it throws, and `main()` had no `.catch`, so the rejection vanished and the status bar froze. Fix: `opfs.ts` now tries `createWritable` first, falls back to `createSyncAccessHandle` (supported on Safari main thread since 17.4, April 2024). `main.ts` got a top-level `.catch` that paints any startup error into the toolbar (or a full-page banner if the toolbar itself never mounted), and warning details from the render path are now exposed as a tooltip on the status text (long-press on iPad, hover on desktop) and logged to `console.warn`.
+
 -----
 
 ## Deployment (continuous)
