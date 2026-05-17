@@ -9,7 +9,6 @@
 export interface LayoutHandle {
   toolbar: HTMLElement;
   paneHost: HTMLElement; // root for the DockviewComponent
-  fileSelect: HTMLSelectElement;
   renderBtn: HTMLButtonElement;
   importInput: HTMLInputElement;
   exportBtn: HTMLButtonElement;
@@ -26,10 +25,6 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   const title = el("h1");
   title.innerHTML = `Slipway <small>· Quarto reveal.js authoring</small>`;
   toolbar.appendChild(title);
-
-  const fileSelect = el("select") as HTMLSelectElement;
-  fileSelect.title = "Active .qmd file";
-  toolbar.appendChild(fileSelect);
 
   const renderBtn = el("button", "primary") as HTMLButtonElement;
   renderBtn.textContent = "Render";
@@ -72,7 +67,6 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   return {
     toolbar,
     paneHost,
-    fileSelect,
     renderBtn,
     importInput,
     exportBtn,

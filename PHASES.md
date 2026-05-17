@@ -211,6 +211,25 @@ Pandoc 3.9's revealjs-standalone template hardcodes `unpkg.com/reveal.js@^5/...`
 - Bundle cost: ~265 KB of inlined reveal.js source baked into the JS chunk (~60 KB gz). Acceptable next to the 58 MB pandoc.wasm.
 - Upgrade path: bump `reveal.js` in `package.json`, redeploy. Once the Service Worker arrives in Phase 3, this is the same "new version available — reload to apply" banner that'll surface pandoc.wasm updates.
 
+### Increment 4: File tree manager
+
+Replaces the toolbar's `<select>` dropdown with a proper file tree in a left-side Dockview panel. Full CRUD on project files: click to open, rename, delete; per-folder "New file" / "New folder"; project-root buttons at the top of the panel.
+
+- New `ui/file-tree.ts` builds a hierarchical view from `listFiles()`'s flat path list and renders an indented tree with hover-revealed action buttons (visible-by-default on touch via `@media (hover: none)`). Folders track expand/collapse state across refreshes; the active file's ancestors auto-expand so it's always visible.
+- `storage.ts` gains a `rename(oldPath, newPath)` helper that does a get/put/delete inside one IDB transaction and refuses overwriting an existing key.
+- IDB has no real directories — empty folders are modelled with a `.placeholder` stub so the tree can show them; the placeholder (and any other dot-prefixed name like the `.seeded` marker) is filtered from the displayed list.
+- File-tree actions wire through `main.ts` callbacks: rename / delete autosave first if affecting the active file and update the editor title; new file opens in the editor if it's a `.qmd`. Zip import now refreshes the tree and opens the first `.qmd` it finds instead of populating a dropdown.
+- Toolbar's `<select>` removed (along with its `refreshFileList` helper); navigation is the tree from here on.
+- Initial layout: Files panel at 220 px width, Editor and Preview to its right. All three are tab-draggable / dock-rearrangeable like before.
+
+Smoke test: 10/10 still passing (no renderer-touching changes). Build clean; Chromium e2e renders the workshop deck in ~1.5 s.
+
+UX notes worth flagging:
+
+- Rename / new-file / new-folder use `window.prompt()`. Functional, but ugly on iOS. Inline rename via swap-to-input is a Phase 2 polish item.
+- Delete uses `window.confirm()`. Same comment.
+- No drag-and-drop reorder / move yet — would build on Dockview's DnD primitives but is its own increment.
+
 -----
 
 ## Repo cleanup (deferred)

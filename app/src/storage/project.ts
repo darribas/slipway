@@ -7,7 +7,7 @@ import { listFiles, readBytes, readText, writeText } from "./storage";
  */
 let activeQmdPath: string | null = null;
 
-export function setActiveQmd(path: string): void {
+export function setActiveQmd(path: string | null): void {
   activeQmdPath = path;
 }
 
