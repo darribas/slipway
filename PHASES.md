@@ -160,3 +160,44 @@ npm run typecheck            # tsc --noEmit only
 - Service worker + offline, web app manifest, PDF export — all Phase 3.
 - Plugin opt-in (Menu / Search / Chalkboard) per-deck via YAML — Phase 3.
 - Bundled templates beyond the imago workshop seed (imago-light, imago-dark, journal, workshop scaffold) — Phase 3.
+
+-----
+
+## Deployment (continuous)
+
+**Status:** ✓ wired up
+**Commits:** `81e2639`
+**Workflow:** [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)
+**URLs:**
+- `https://darribas.github.io/slipway/`
+- `https://darribas.org/slipway/` (via account-level custom domain)
+
+### How it works
+
+Every push to `main` (and the manual **Run workflow** button) triggers:
+
+1. `cd app && npm ci && npm run build`
+2. Upload `app/dist/` as the Pages artifact
+3. `actions/deploy-pages@v4` publishes it
+
+Total run time ≈ 1–2 minutes. The deploy job's own `npm run build` step runs `tsc --noEmit` first, so a typecheck regression fails CI before publishing.
+
+### One-time GitHub UI step
+
+`Settings → Pages → Source → "GitHub Actions"`. Without this, the first deploy fails with a clear "Pages not configured for Actions source" error.
+
+### Why Actions, not Pages-from-branch
+
+The deployable files only exist after a Vite build — `app/` itself is TypeScript source. The "Deploy from a branch" Pages mode can only serve pre-built HTML.
+
+### Why no `CNAME` file or per-repo custom domain
+
+`darribas.org` is an account-level verified custom domain, so GitHub Pages automatically serves every repo at `darribas.org/<repo>/` in addition to `darribas.github.io/<repo>/`. Adding a per-repo `CNAME` would try to claim the apex `darribas.org/` itself, conflicting with that setup.
+
+### Why `base: "./"` in `vite.config.ts`
+
+Relative URLs in the built HTML resolve correctly under any subpath, so the build works identically at `darribas.github.io/slipway/` and `darribas.org/slipway/` with no per-host configuration.
+
+### Capacity headroom
+
+Total deployed footprint ~62 MB (58 MB `pandoc.wasm` + 4 MB JS). Pages limits: 100 MB/file, 1 GB/site (we're well under both). Soft bandwidth cap is 100 GB/month — about 1,600 first-time visits before throttling. Hashed asset filenames mean repeat visits hit the browser cache and cost zero bandwidth.

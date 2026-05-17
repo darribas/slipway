@@ -179,7 +179,12 @@ Service Worker + offline, Web App Manifest, PDF export, presenter view, plugin s
 ## Open items
 
 - **App name** and icon
-- **Hosting**: imago subdomain, personal domain, or GitHub Pages
 - **Journal theme spec**: pending — share the SCSS when ready
 - **Quarto extension inventory**: list of extensions your current decks depend on, to identify any load-bearing Lua filters that would block faithful reproduction
 - **pandoc-crossref WASM**: needs investigation for cross-reference support
+
+-----
+
+## Resolved decisions
+
+- **Hosting**: GitHub Pages, deployed by GitHub Actions from `app/dist/` on every push to `main`. Served at `darribas.github.io/slipway/` and (via the account-level custom domain) `darribas.org/slipway/`. See `.github/workflows/deploy.yml`.
