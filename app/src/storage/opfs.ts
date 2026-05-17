@@ -1,6 +1,18 @@
 // Thin wrappers over the Origin Private File System API.
 // All paths are POSIX-style and relative to the OPFS root.
 
+// Local declaration — lib.dom in this TS version doesn't expose
+// FileSystemSyncAccessHandle as a named global. We feature-detect it at
+// runtime for the Safari fallback path.
+interface SyncAccessHandle {
+  read(buffer: ArrayBufferView, options?: { at?: number }): number;
+  write(buffer: ArrayBufferView, options?: { at?: number }): number;
+  truncate(newSize: number): void;
+  getSize(): number;
+  flush(): void;
+  close(): void;
+}
+
 export async function root(): Promise<FileSystemDirectoryHandle> {
   return await navigator.storage.getDirectory();
 }
@@ -50,19 +62,46 @@ export async function exists(path: string): Promise<boolean> {
 }
 
 export async function writeText(path: string, content: string): Promise<void> {
-  const handle = await resolveFile(path, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(content);
-  await writable.close();
+  await writeBytes(path, new TextEncoder().encode(content));
 }
 
 export async function writeBytes(path: string, content: Uint8Array): Promise<void> {
   const handle = await resolveFile(path, { create: true });
-  const writable = await handle.createWritable();
-  // Slice to guarantee a plain ArrayBuffer (some lib.dom types reject
-  // ArrayBufferLike unions that could include SharedArrayBuffer).
-  await writable.write(new Uint8Array(content).slice().buffer);
-  await writable.close();
+  // Own copy in a fresh ArrayBuffer — guarantees a plain ArrayBuffer (some
+  // lib.dom types reject ArrayBufferLike unions that could include
+  // SharedArrayBuffer) and isolates from caller mutations.
+  const data = new Uint8Array(content).slice();
+
+  // Prefer createWritable (async, supported by Chromium, Firefox, and Safari
+  // 18.4+). Fall back to createSyncAccessHandle (supported on Safari main
+  // thread since 17.4) for older Safari. createSyncAccessHandle's underlying
+  // calls are synchronous but only blocking for the duration of these few
+  // small writes — fine for the main thread.
+  const h = handle as FileSystemFileHandle & {
+    createWritable?: () => Promise<FileSystemWritableFileStream>;
+    createSyncAccessHandle?: () => Promise<SyncAccessHandle>;
+  };
+  if (typeof h.createWritable === "function") {
+    const writable = await h.createWritable();
+    await writable.write(data.buffer);
+    await writable.close();
+    return;
+  }
+  if (typeof h.createSyncAccessHandle === "function") {
+    const sync = await h.createSyncAccessHandle();
+    try {
+      sync.truncate(0);
+      sync.write(data, { at: 0 });
+      sync.flush();
+    } finally {
+      sync.close();
+    }
+    return;
+  }
+  throw new Error(
+    "Browser doesn't support OPFS file writes (needs Safari 17.4+, " +
+      "Chromium 86+, or Firefox 111+).",
+  );
 }
 
 export async function remove(path: string): Promise<void> {
