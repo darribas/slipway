@@ -1,0 +1,66 @@
+# Builds the Vite app under app/ and deploys app/dist/ to GitHub Pages.
+# Triggered automatically on every push to main, plus a manual dispatch
+# button for forced redeploys.
+#
+# One-time setup on GitHub:
+#   Settings → Pages → Source → "GitHub Actions"
+# Without that, the first deploy step fails with a clear "Pages not
+# configured for Actions source" error.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required by actions/deploy-pages to claim the pages environment and
+# request the OIDC token used to upload the artifact.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one active Pages deploy. cancel-in-progress=false so a
+# running deploy finishes (rather than getting interrupted mid-upload)
+# before the next one starts.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: app
+
+      - name: Build
+        run: npm run build
+        working-directory: app
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
