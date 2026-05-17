@@ -1,19 +1,8 @@
 import { createPandocInstance } from "./pandoc-core.js";
 import pandocWasmUrl from "virtual:pandoc-wasm-url";
+import type { PandocInstance } from "./types";
 
-export interface PandocInstance {
-  convert: (
-    options: Record<string, unknown>,
-    stdin: string | null,
-    files: Record<string, string | Blob>,
-  ) => Promise<{
-    stdout: string;
-    stderr: string;
-    warnings: unknown[];
-    files: Record<string, string | Blob>;
-    mediaFiles: Record<string, Blob>;
-  }>;
-}
+export type { PandocInstance };
 
 let cached: Promise<PandocInstance> | null = null;
 

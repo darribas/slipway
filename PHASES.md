@@ -170,6 +170,25 @@ npm run typecheck            # tsc --noEmit only
 
 -----
 
+## Phase 2 — Full UX (in progress)
+
+**Status:** 🚧 in progress
+**Goal (per `SPEC.md`):** three pane modes (Write / Review / Present), vim bindings, file tree manager, image insertion flows (paste / picker / drag-drop). Plus, beyond the original spec: tabbed and flexibly resizable panes (VS Code / Jupyter Lab style) as the foundation the pane modes sit on top of.
+
+### Increment 1: Smoke test in CI
+
+The regression net that gates everything else in Phase 2. Before any new UI work touches the renderer's neighbours (preprocessor, sass, asset inlining), the deck has to keep rendering correctly.
+
+- `vitest` added as a devDep; `app/test/smoke.test.ts` drives `src/core/render.ts` directly against the bundled imago workshop template and asserts on the output. Mirrors the spirit of `phase0/smoke.js` but exercises the *current* code path, not the frozen Phase 0 inline copy.
+- 9 assertions: end-to-end render produces ≥50KB of HTML with empty stderr; reveal.js + compiled theme.css present; `.dark` / `.columns` / `.hlg` classes survive; footnotes + bibliography in `#refs` + citeproc entries render; local PNGs inlined as data URIs; external Wikimedia URLs left intact; `::: {.incremental}` becomes reveal.js fragments. Two synthetic-mini-deck probes cover features the workshop doesn't exercise: KaTeX assets injection on `$math$`, `::: notes` → `<aside class="notes">`.
+- `PandocInstance` interface moved from `core/pandoc.ts` (which has a Vite-only `virtual:pandoc-wasm-url` import) to `core/types.ts` so the test can import it in a node-only context without dragging the Vite virtual module into the test runner. `pandoc-wasm`'s `convert()` is shape-compatible with `PandocInstance.convert` and is used as the renderer's pandoc dependency in tests.
+- New `.github/workflows/ci.yml` runs `npm test` + `npm run build` on every PR to main and on manual dispatch.
+- The existing `deploy.yml` got a `npm test` step before `npm run build`, so a regression on a direct push to main also fails the deploy before publishing.
+
+Runs in ~9s locally. CI should finish under a minute including the npm cache restore.
+
+-----
+
 ## Deployment (continuous)
 
 **Status:** ✓ wired up
