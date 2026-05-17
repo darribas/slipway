@@ -251,7 +251,8 @@ async function showStartupError(e: unknown): Promise<void> {
       `getDirectory: ${cap.getDirectory}\n` +
       `createWritable: ${cap.createWritable}\n` +
       `createSyncAccessHandle: ${cap.createSyncAccessHandle}\n` +
-      `persisted: ${cap.persisted}`;
+      `persisted: ${cap.persisted}\n` +
+      `probeError: ${cap.probeError ?? "(none)"}`;
   } catch (probeErr) {
     diag = `(capability probe also failed: ${probeErr instanceof Error ? probeErr.message : String(probeErr)})`;
   }
