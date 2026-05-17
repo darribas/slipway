@@ -1,7 +1,6 @@
-import type { PandocInstance } from "./pandoc";
 import { compileScss } from "./sass";
 import { preprocessDeck } from "./preprocess";
-import type { RenderInputs, RenderResult } from "./types";
+import type { PandocInstance, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
 

@@ -29,7 +29,7 @@ project files (OPFS)
 - **Reveal.js core** + plugins: Menu (default on), Search, Chalkboard (available, opt-in per deck via YAML)
 - **CodeMirror 6** + `@replit/codemirror-vim` for the editor
 - **Service Worker** for offline asset caching and update flow
-- **OPFS** (Origin Private File System) for project storage
+- **IndexedDB** for project storage *(originally OPFS in the spec; OPFS turned out to be unreliable in iOS Safari's regular browser tabs — see `PHASES.md` Phase 1 post-release fixes)*
 - **Web App Manifest** with `display: standalone` for Add-to-Home-Screen install
 
 -----

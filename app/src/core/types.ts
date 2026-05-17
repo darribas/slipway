@@ -20,3 +20,20 @@ export interface RenderResult {
   stderr: string;
   durationMs: number;
 }
+
+// Minimal interface for whatever drives pandoc. Lives in types.ts (rather
+// than pandoc.ts) so render.ts can be imported from a node-only test
+// context without pulling in the Vite-only virtual:pandoc-wasm-url module.
+export interface PandocInstance {
+  convert: (
+    options: Record<string, unknown>,
+    stdin: string | null,
+    files: Record<string, string | Blob>,
+  ) => Promise<{
+    stdout: string;
+    stderr: string;
+    warnings: unknown[];
+    files: Record<string, string | Blob>;
+    mediaFiles: Record<string, Blob>;
+  }>;
+}

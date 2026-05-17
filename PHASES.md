@@ -170,6 +170,37 @@ npm run typecheck            # tsc --noEmit only
 
 -----
 
+## Phase 2 — Full UX (in progress)
+
+**Status:** 🚧 in progress
+**Goal (per `SPEC.md`):** three pane modes (Write / Review / Present), vim bindings, file tree manager, image insertion flows (paste / picker / drag-drop). Plus, beyond the original spec: tabbed and flexibly resizable panes (VS Code / Jupyter Lab style) as the foundation the pane modes sit on top of.
+
+### Increment 1: Smoke test in CI
+
+The regression net that gates everything else in Phase 2. Before any new UI work touches the renderer's neighbours (preprocessor, sass, asset inlining), the deck has to keep rendering correctly.
+
+- `vitest` added as a devDep; `app/test/smoke.test.ts` drives `src/core/render.ts` directly against the bundled imago workshop template and asserts on the output. Mirrors the spirit of `phase0/smoke.js` but exercises the *current* code path, not the frozen Phase 0 inline copy.
+- 9 assertions: end-to-end render produces ≥50KB of HTML with empty stderr; reveal.js + compiled theme.css present; `.dark` / `.columns` / `.hlg` classes survive; footnotes + bibliography in `#refs` + citeproc entries render; local PNGs inlined as data URIs; external Wikimedia URLs left intact; `::: {.incremental}` becomes reveal.js fragments. Two synthetic-mini-deck probes cover features the workshop doesn't exercise: KaTeX assets injection on `$math$`, `::: notes` → `<aside class="notes">`.
+- `PandocInstance` interface moved from `core/pandoc.ts` (which has a Vite-only `virtual:pandoc-wasm-url` import) to `core/types.ts` so the test can import it in a node-only context without dragging the Vite virtual module into the test runner. `pandoc-wasm`'s `convert()` is shape-compatible with `PandocInstance.convert` and is used as the renderer's pandoc dependency in tests.
+- New `.github/workflows/ci.yml` runs `npm test` + `npm run build` on every PR to main and on manual dispatch.
+- The existing `deploy.yml` got a `npm test` step before `npm run build`, so a regression on a direct push to main also fails the deploy before publishing.
+
+Runs in ~9s locally. CI should finish under a minute including the npm cache restore.
+
+### Increment 2: Dockable pane layout (Dockview)
+
+Foundation for the rest of Phase 2 — three pane modes, file tree, image insertion, presenter view — all sit on top of this. Hand-rolled split grid replaced with `dockview-core` (vanilla TS, ~80 KB gz). The editor and preview are now Dockview panels with tabs, drag-to-dock, drag-to-tab, and free splitting in any direction.
+
+- `dockview-core@6.3.0` added as a dependency.
+- `layout.ts` shrank: removed the bespoke split grid + pointer-driven splitter. The pane area is now just a host div that main.ts attaches a `DockviewComponent` to.
+- `main.ts` builds the editor and preview into plain `HTMLDivElement` containers, then registers them with Dockview via the `createComponent` factory hook. Each `IContentRenderer` just exposes its pre-built container; Dockview moves it between groups during dock/tab/split operations and CodeMirror's `lineWrapping` handles the size changes.
+- Initial layout: editor panel on the left, preview panel on the right (tab title tracks the active `.qmd`). Both panels are drag-rearrangeable; resize is built in. Smoke test still 9/9, browser e2e confirms render still produces 178 KB of HTML in ~1.5 s.
+- Bundle cost: ~100 KB of Dockview CSS (9 KB gz) + ~250 KB JS (60 KB gz). Negligible next to the 58 MB pandoc.wasm.
+
+Known cosmetic gap (deferred to a small polish increment): Dockview's theme is currently scoped to the pane host element and applied via `prefers-color-scheme`, but the cascade doesn't always win against Dockview's own default dark styling. Result: in light-mode environments the toolbar is light while the dock chrome stays dark. Functional but visually inconsistent.
+
+-----
+
 ## Deployment (continuous)
 
 **Status:** ✓ wired up
