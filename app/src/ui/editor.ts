@@ -4,6 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { yaml as yamlLang } from "@codemirror/lang-yaml";
 import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, foldGutter, LanguageDescription } from "@codemirror/language";
 import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { oneDark } from "@codemirror/theme-one-dark";
 
 export interface EditorHandle {
   view: EditorView;
@@ -21,6 +22,14 @@ export interface EditorOptions {
 }
 
 export function createEditor(opts: EditorOptions): EditorHandle {
+  // The previous build relied on CodeMirror's defaultHighlightStyle, which is
+  // designed for white backgrounds. In light mode, Dockview's panel
+  // background bled through (no explicit bg set), giving dark-on-dark text
+  // that was literally unreadable. Now we set an explicit background tied to
+  // our --bg-elev var and pick whichever syntax theme matches the user's
+  // OS appearance. Snapshot at construction; a reload picks up theme flips.
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
   const extensions: Extension[] = [
     history(),
     lineNumbers(),
@@ -28,7 +37,10 @@ export function createEditor(opts: EditorOptions): EditorHandle {
     highlightActiveLineGutter(),
     foldGutter(),
     indentOnInput(),
-    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    // Pick the syntax highlighting that goes with the editor background.
+    // oneDark in dark mode (its built-in scheme includes the background too);
+    // defaultHighlightStyle in light mode (designed for white).
+    ...(isDark ? [oneDark] : [syntaxHighlighting(defaultHighlightStyle, { fallback: true })]),
     markdown({
       codeLanguages: [
         LanguageDescription.of({
@@ -63,11 +75,32 @@ export function createEditor(opts: EditorOptions): EditorHandle {
     EditorView.updateListener.of((update) => {
       if (update.docChanged) opts.onChange?.(update.state.doc.toString());
     }),
-    EditorView.theme({
-      "&": { height: "100%", fontSize: "14px" },
-      ".cm-scroller": { fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace' },
-      ".cm-content": { padding: "12px 0" },
-    }),
+    // Override the surrounding chrome (gutter, active line, cursor, etc.)
+    // even when oneDark is loaded — its defaults match its own dark palette,
+    // which is fine, but explicit values let light mode look clean too.
+    EditorView.theme(
+      {
+        "&": {
+          height: "100%",
+          fontSize: "14px",
+          backgroundColor: isDark ? "#1e1e1e" : "#ffffff",
+          color: isDark ? "#ececec" : "#1a1a1a",
+        },
+        ".cm-scroller": { fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace' },
+        ".cm-content": { padding: "12px 0", caretColor: isDark ? "#ececec" : "#1a1a1a" },
+        ".cm-gutters": {
+          backgroundColor: isDark ? "#1e1e1e" : "#fafafa",
+          color: isDark ? "#666" : "#aaa",
+          border: "0",
+        },
+        ".cm-activeLine": { backgroundColor: isDark ? "#2a2a2a" : "#f4f4f4" },
+        ".cm-activeLineGutter": { backgroundColor: isDark ? "#2a2a2a" : "#f0f0f0" },
+        ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
+          backgroundColor: isDark ? "#264f78" : "#cfe1ff",
+        },
+      },
+      { dark: isDark },
+    ),
   ];
 
   const view = new EditorView({

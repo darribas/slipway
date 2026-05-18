@@ -230,6 +230,34 @@ UX notes worth flagging:
 - Delete uses `window.confirm()`. Same comment.
 - No drag-and-drop reorder / move yet — would build on Dockview's DnD primitives but is its own increment.
 
+### User-testing backlog (Phase 2)
+
+Reported during testing, queued for individual increments. Tick off as they ship.
+
+- ✓ **[5a]** Editor unreadable in light mode — see increment 5a below.
+- [ ] **[5b]** Editor only opens `.qmd` files. The user can't edit `.scss` / `.bib` / `.csl` / `.yaml` etc., which makes the app much less useful as a project editor. Needs decoupling "active editor file" from "active deck" (the latter is what the Render button targets).
+- [ ] **[5c]** Zip import appears to drop non-`.qmd` files. User reports only the `.qmd` survives the import. Possibilities: real bug in `importZip` or its filtering, an auto-collapsed folder hiding what's actually there, or a missing tree refresh. Needs investigation with a real Quarto project zip + better post-import diagnostics ("Imported N files across M folders").
+- [ ] **[5d]** Renderer doesn't pick up pre-compiled `.css` themes. `project.ts` only looks for `.scss`; users with a `.css` theme get an unstyled deck. Trivial fix — extend the stylesheet picker to accept either, treat `.css` as already-compiled and skip the Sass step.
+
+### Increment 4.1: File-tree actions always visible
+
+User feedback: "how do I rename on touch?" The action icons (✎ rename, × delete, + new-file-in-folder) were hidden by default and only revealed on hover, with a `@media (hover: none)` fallback meant to keep them visible on touch devices. iOS Safari reports `hover: none` inconsistently (especially when an iPad is paired with a keyboard or trackpad), so on the user's iPhone the icons weren't appearing at all and there was no obvious way to discover them.
+
+Fix: drop the hover gate entirely. Actions are now always-visible at 0.45 opacity, brightening to full on row hover / focus. Touch-target size bumped to 28×28 px. ~10 lines of CSS, no logic change. Smoke test still 10/10.
+
+### Increment 5a: Editor readable in light mode
+
+User report: editor was "not just unaesthetic, but unusable" in light mode — couldn't edit the `.qmd` at all. Root cause: CodeMirror's `defaultHighlightStyle` is designed for white backgrounds, but the editor's element had no explicit background, so Dockview's dark panel chrome bled through. Result: dark syntax colours on a dark background, illegible.
+
+Fix:
+
+- `@codemirror/theme-one-dark` added as a dependency — the standard community dark theme for CodeMirror, ~5 KB.
+- `editor.ts` now snapshots `prefers-color-scheme` at construction. Dark mode loads `oneDark` (which brings its own background + highlight palette). Light mode keeps `defaultHighlightStyle` on an explicit white background.
+- Explicit `EditorView.theme` block sets background, foreground, caret, gutter, active-line, and selection colours for both modes so the editor chrome stays coherent with the rest of the app.
+- Live theme switching deferred — snapshot at load is enough for now; a reload picks up an OS appearance flip. Wire to a live `matchMedia` listener if it becomes an annoyance.
+
+Verified by light and dark screenshots: both modes legible, syntax highlighting visible, file tree / toolbar / preview palettes coherent. Smoke test still 10/10.
+
 -----
 
 ## Repo cleanup (deferred)
