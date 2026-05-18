@@ -1,4 +1,6 @@
 import type { RenderInputs } from "../core/types";
+import { extractDeclarations } from "../core/frontmatter";
+import { resolveDeclaredPath } from "../core/path-resolve";
 import { listFiles, readBytes, readText, writeText } from "./storage";
 
 /**
@@ -77,16 +79,24 @@ export async function saveFile(path: string, content: string): Promise<void> {
 export async function buildRenderInputs(qmdPath: string): Promise<RenderInputs> {
   const qmd = await readText(qmdPath);
   const all = await listFiles();
+  const declared = extractDeclarations(qmd);
 
-  // Prefer .scss (so source edits are picked up); fall back to .css for
-  // projects that ship pre-compiled themes. If both exist, .scss wins.
-  const scssPath = pickFirst(all, (p) => p.toLowerCase().endsWith(".scss"));
-  const cssPath = scssPath ? null : pickFirst(all, (p) => p.toLowerCase().endsWith(".css"));
-  const themePath = scssPath ?? cssPath;
+  // Theme resolution. Honour the YAML's `theme:` declaration when present
+  // (with path resolution that tolerates `../` segments and basename
+  // shorthand), so a project with multiple .scss files renders predictably.
+  // Fall back to "first .scss" then "first .css" only when nothing's
+  // declared or the declared path can't be resolved.
+  let themePath: string | null = null;
+  if (declared.theme) themePath = resolveDeclaredPath(declared.theme, all);
+  if (!themePath) themePath = pickFirst(all, (p) => p.toLowerCase().endsWith(".scss"));
+  if (!themePath) themePath = pickFirst(all, (p) => p.toLowerCase().endsWith(".css"));
   const stylesheet = themePath ? await readText(themePath) : "";
-  const stylesheetIsPrecompiled = themePath != null && themePath === cssPath;
+  const stylesheetIsPrecompiled = themePath?.toLowerCase().endsWith(".css") ?? false;
 
-  const bibPath = pickFirst(all, (p) => p.toLowerCase().endsWith(".bib"));
+  // Bibliography resolution follows the same pattern.
+  let bibPath: string | null = null;
+  if (declared.bib) bibPath = resolveDeclaredPath(declared.bib, all);
+  if (!bibPath) bibPath = pickFirst(all, (p) => p.toLowerCase().endsWith(".bib"));
   const bib = bibPath ? await readText(bibPath) : null;
 
   const assets = new Map<string, Uint8Array>();

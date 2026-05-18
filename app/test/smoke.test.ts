@@ -18,6 +18,8 @@ import { describe, expect, test } from "vitest";
 import { convert } from "pandoc-wasm";
 
 import { renderDeck } from "../src/core/render";
+import { extractDeclarations } from "../src/core/frontmatter";
+import { resolveDeclaredPath } from "../src/core/path-resolve";
 import type { PandocInstance, RenderInputs } from "../src/core/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -123,6 +125,92 @@ describe("imago workshop deck", () => {
     const { html } = await renderDeck(pandoc, await loadInputs());
     expect(html).toMatch(/class="[^"]*\bfragment\b/);
   }, 30_000);
+});
+
+describe("frontmatter declaration extraction", () => {
+  test("top-level theme: and bibliography:", () => {
+    const qmd = `---
+title: A
+theme: weird/path.scss
+bibliography: refs.bib
+---
+
+# Hi
+`;
+    expect(extractDeclarations(qmd)).toEqual({ theme: "weird/path.scss", bib: "refs.bib" });
+  });
+
+  test("nested format.revealjs.theme:", () => {
+    const qmd = `---
+title: A
+format:
+  revealjs:
+    theme: imago.scss
+bibliography: refs.bib
+---
+
+# Hi
+`;
+    expect(extractDeclarations(qmd)).toEqual({ theme: "imago.scss", bib: "refs.bib" });
+  });
+
+  test("missing frontmatter is fine", () => {
+    expect(extractDeclarations("# Hi\nbody\n")).toEqual({ theme: null, bib: null });
+  });
+
+  test("malformed YAML doesn't throw", () => {
+    expect(extractDeclarations("---\nthis: : : not yaml\n---\n")).toEqual({ theme: null, bib: null });
+  });
+});
+
+describe("resolveDeclaredPath", () => {
+  const tree = [
+    "slide.qmd",
+    "assets/imago.scss",
+    "assets/references.bib",
+    "themes/dark.scss",
+    "themes/light.scss",
+  ];
+
+  test("exact match wins", () => {
+    expect(resolveDeclaredPath("assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("strips leading ../ to resolve the imago workshop case", () => {
+    // The seed deck declares `theme: ../assets/imago.scss` because in the
+    // real workshop the qmd lives in `slides/`. Our IDB is flat from the
+    // project root, so the ../ has to be normalised away.
+    expect(resolveDeclaredPath("../assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("strips multiple leading ../", () => {
+    expect(resolveDeclaredPath("../../assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("strips leading ./", () => {
+    expect(resolveDeclaredPath("./assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("unambiguous basename fallback", () => {
+    // User declared theme: imago.scss with no directory; we find it anyway.
+    expect(resolveDeclaredPath("imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("ambiguous basename returns null (caller decides)", () => {
+    expect(resolveDeclaredPath("dark.scss", [...tree, "alt/dark.scss"])).toBeNull();
+  });
+
+  test("unknown file returns null", () => {
+    expect(resolveDeclaredPath("nope.scss", tree)).toBeNull();
+  });
+
+  test("exact match preferred over basename", () => {
+    // `themes/dark.scss` and `assets/dark.scss` both exist; declared path
+    // matches one of them — use that, don't trigger the ambiguous-basename
+    // fallback.
+    const t = [...tree, "assets/dark.scss"];
+    expect(resolveDeclaredPath("themes/dark.scss", t)).toBe("themes/dark.scss");
+  });
 });
 
 describe("synthetic features the workshop deck doesn't exercise", () => {

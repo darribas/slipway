@@ -238,6 +238,7 @@ Reported during testing, queued for individual increments. Tick off as they ship
 - ✓ **[5b]** Editor only opens `.qmd` files — see increment 5b/d below.
 - [ ] **[5c]** Zip import appears to drop non-`.qmd` files. User reports only the `.qmd` survives the import. Possibilities: real bug in `importZip` or its filtering, an auto-collapsed folder hiding what's actually there, or a missing tree refresh. Needs investigation with a real Quarto project zip + better post-import diagnostics ("Imported N files across M folders").
 - ✓ **[5d]** Renderer wasn't picking up the theme at all (not just the `.css` case). Real root cause was that pandoc emitted a `<link>` referencing the WASI VFS path which the iframe couldn't resolve — see increment 5b/d below.
+- ✓ **[5e]** Renderer ignored the YAML's `theme:` declaration and just globbed for the first `.scss`. The seed deck declared `theme: ../assets/imago.scss` but the renderer never read that — it accidentally worked because there was only one `.scss` in the project. Fragile if multiple stylesheets exist or one gets renamed. Fixed by `resolveDeclaredPath` (see increment 5e below).
 
 ### Increment 4.1: File-tree actions always visible
 
@@ -279,6 +280,24 @@ Smoke test gets two new assertions: rendered HTML contains the imago navy colour
 Old `readQmd` / `saveQmd` helpers in `project.ts` are now thin wrappers superseded by `readFile` / `saveFile`.
 
 Smoke test still 12/12. Browser e2e confirms: clicking the imago `.scss` in the tree opens it in the editor; the toolbar's deck status survives the navigation; hitting Render still renders the last-touched `.qmd`.
+
+### Increment 5e: Honour the YAML's theme: / bibliography: declarations
+
+User caught a fragility: the seed `.qmd` declares `theme: ../assets/imago.scss` but the actual file lives at `assets/imago.scss` (the seed flattened the workshop's `slides/` directory). The renderer was accidentally working because `buildRenderInputs` ignored the YAML declarations entirely and globbed for the first `.scss` it found — fine with one stylesheet, surprising as soon as a project has two.
+
+New modules:
+
+- `core/frontmatter.ts` — `extractDeclarations(qmd)` parses YAML frontmatter and returns `{ theme, bib }`, handling both top-level `theme:` / `bibliography:` and the nested `format: revealjs: theme:` form.
+- `core/path-resolve.ts` — `resolveDeclaredPath(declared, allPaths)` tries (a) exact match, (b) match after stripping leading `./` and `../` segments, (c) unambiguous basename match anywhere in the tree. Returns null when ambiguous so the caller can fall back to a glob.
+
+`buildRenderInputs` now extracts the declarations, resolves them, and only falls back to "first `.scss` / `.css` / `.bib`" when nothing's declared *or* the declared path can't be resolved.
+
+Smoke test added 11 new unit-level assertions:
+
+- 4 for `extractDeclarations`: top-level, nested-format, missing frontmatter, malformed YAML.
+- 7 for `resolveDeclaredPath`: exact match, single/multiple `../` stripping, `./` stripping, unambiguous basename, ambiguous basename → null, unknown → null, exact match preferred over basename when ambiguous would otherwise apply.
+
+Total now 23/23 passing. The existing imago workshop end-to-end render still hits the same `assets/imago.scss` it always did, but now via the declaration-driven path rather than by accident.
 
 -----
 
