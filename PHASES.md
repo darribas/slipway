@@ -235,9 +235,9 @@ UX notes worth flagging:
 Reported during testing, queued for individual increments. Tick off as they ship.
 
 - ✓ **[5a]** Editor unreadable in light mode — see increment 5a below.
-- [ ] **[5b]** Editor only opens `.qmd` files. The user can't edit `.scss` / `.bib` / `.csl` / `.yaml` etc., which makes the app much less useful as a project editor. Needs decoupling "active editor file" from "active deck" (the latter is what the Render button targets).
+- ✓ **[5b]** Editor only opens `.qmd` files — see increment 5b/d below.
 - [ ] **[5c]** Zip import appears to drop non-`.qmd` files. User reports only the `.qmd` survives the import. Possibilities: real bug in `importZip` or its filtering, an auto-collapsed folder hiding what's actually there, or a missing tree refresh. Needs investigation with a real Quarto project zip + better post-import diagnostics ("Imported N files across M folders").
-- [ ] **[5d]** Renderer doesn't pick up pre-compiled `.css` themes. `project.ts` only looks for `.scss`; users with a `.css` theme get an unstyled deck. Trivial fix — extend the stylesheet picker to accept either, treat `.css` as already-compiled and skip the Sass step.
+- ✓ **[5d]** Renderer wasn't picking up the theme at all (not just the `.css` case). Real root cause was that pandoc emitted a `<link>` referencing the WASI VFS path which the iframe couldn't resolve — see increment 5b/d below.
 
 ### Increment 4.1: File-tree actions always visible
 
@@ -257,6 +257,28 @@ Fix:
 - Live theme switching deferred — snapshot at load is enough for now; a reload picks up an OS appearance flip. Wire to a live `matchMedia` listener if it becomes an annoyance.
 
 Verified by light and dark screenshots: both modes legible, syntax highlighting visible, file tree / toolbar / preview palettes coherent. Smoke test still 10/10.
+
+### Increment 5b/d: Edit any text file + theme actually applies
+
+Two user-testing reports landed in the same area of the codebase, bundled into one increment.
+
+**5d — theme files weren't being picked up at all.** Bigger bug than the report suggested. We compile the project's SCSS to CSS and put it in pandoc's WASI VFS at path `theme.css`, and tell pandoc `css: ["theme.css"]`. Pandoc dutifully emits `<link rel="stylesheet" href="theme.css">` in the output — but the iframe receiving that HTML via `srcdoc` has no way to resolve `theme.css` (the VFS is invisible to it). So every render since Phase 1 has been silently missing its theme; the smoke test was passing on "link tag exists" without checking the CSS ever reached the browser.
+
+Same fix shape as the reveal.js inlining (increment 3): post-process pandoc's output to swap the `<link>` for an inline `<style data-from="theme.css">` block carrying the compiled CSS. New `inlineThemeCss(html, css)` in `core/inline-assets.ts`; `render.ts` calls it right after `inlineRevealAssets`.
+
+Stylesheet picker in `project.ts` now also accepts `.css` natively — prefers `.scss` when both exist (so source edits keep applying), falls back to `.css` for projects that ship pre-compiled themes. New `stylesheetIsPrecompiled` flag on `RenderInputs` tells the renderer whether to run Sass or pass through.
+
+Smoke test gets two new assertions: rendered HTML contains the imago navy colour (`#24226f`) and the Figtree font reference, plus a synthetic deck with a `.css` stylesheet round-trips through unchanged. 12 tests now.
+
+**5b — edit any text file.** The file tree's `onOpen` previously bailed for non-`.qmd` paths. Two changes:
+
+- `project.ts` separates `activeEditor` (whatever's in the editor — `.qmd`, `.scss`, `.bib`, `.yaml`, etc.) from `activeQmd` (what Render targets, last-touched `.qmd`). Autosave and `Cmd+S` write to `activeEditor`; the Render button still targets `activeQmd`, which persists when the user navigates to a non-`.qmd` to tweak the theme.
+- New `isTextFile(path)` helper with an extension allowlist (qmd, md, scss, css, bib, csl, yaml, json, txt, svg, html, lua, tex, js, ts). Binary opens are still refused — no point shoving a PNG's bytes into a text editor.
+- `main.ts` callbacks reworked: rename / delete / create / fileTree highlight all key off `activeEditor`. Delete-of-active-qmd falls back to the next available `.qmd`; delete-of-non-qmd-editor-file falls back to whichever `.qmd` is currently the active deck.
+
+Old `readQmd` / `saveQmd` helpers in `project.ts` are now thin wrappers superseded by `readFile` / `saveFile`.
+
+Smoke test still 12/12. Browser e2e confirms: clicking the imago `.scss` in the tree opens it in the editor; the toolbar's deck status survives the navigation; hitting Render still renders the last-touched `.qmd`.
 
 -----
 

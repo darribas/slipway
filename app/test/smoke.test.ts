@@ -32,7 +32,8 @@ async function loadInputs(): Promise<RenderInputs> {
   ]);
   return {
     qmd,
-    scss,
+    stylesheet: scss,
+    stylesheetIsPrecompiled: false,
     bib,
     assets: new Map([["attention_paper.png", new Uint8Array(png)]]),
   };
@@ -55,7 +56,27 @@ describe("imago workshop deck", () => {
   test("includes reveal.js + the compiled imago theme", async () => {
     const { html } = await renderDeck(pandoc, await loadInputs());
     expect(html).toMatch(/reveal\.js/);
-    expect(html).toMatch(/<link[^>]*theme\.css/);
+    // The theme.css used to be a dangling <link> pointing at the WASI VFS
+    // path, so the iframe could never resolve it. Post-pandoc we now inline
+    // the compiled CSS as a <style data-from="theme.css"> block. Assert both
+    // the wrapper and recognisable imago palette colours from the SCSS so we
+    // catch silent regressions of the inlining pass.
+    expect(html).toContain('data-from="theme.css"');
+    expect(html.toLowerCase()).toContain("#24226f"); // imago navy
+    expect(html).toContain("Figtree"); // imago font family
+  }, 30_000);
+
+  test("accepts a pre-compiled .css stylesheet as-is", async () => {
+    const inputs: RenderInputs = {
+      qmd: "---\ntitle: CSS probe\n---\n\n# Hi\n",
+      stylesheet: ".reveal { --probe-marker: rgb(123,45,67); }",
+      stylesheetIsPrecompiled: true,
+      bib: null,
+      assets: new Map(),
+    };
+    const { html } = await renderDeck(pandoc, inputs);
+    expect(html).toContain('data-from="theme.css"');
+    expect(html).toContain("--probe-marker: rgb(123,45,67)");
   }, 30_000);
 
   test("inlines reveal.js — no external <link>/<script> refs left in the deck", async () => {

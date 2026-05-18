@@ -9,7 +9,8 @@ export interface ProjectFile {
 
 export interface RenderInputs {
   qmd: string;
-  scss: string; // raw SCSS text (may be empty)
+  stylesheet: string; // raw text (SCSS or CSS); empty if no theme present
+  stylesheetIsPrecompiled: boolean; // true for .css, false for .scss
   bib: string | null; // raw BibTeX (may be null)
   assets: Map<string, Uint8Array>; // basename -> bytes (PNGs, JPGs, etc.)
 }
