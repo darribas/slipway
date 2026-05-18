@@ -229,16 +229,18 @@ kbd {
   text-overflow: ellipsis;
 }
 .slipway-file-tree .ft-actions {
-  display: none;
+  display: flex;
   gap: 2px;
   flex: 0 0 auto;
+  opacity: 0.45;
+  transition: opacity 100ms ease;
 }
 .slipway-file-tree .ft-row:hover .ft-actions,
-.slipway-file-tree .ft-row:focus-within .ft-actions { display: flex; }
+.slipway-file-tree .ft-row:focus-within .ft-actions { opacity: 1; }
 .slipway-file-tree .ft-action {
   font: inherit;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -246,14 +248,11 @@ kbd {
   border-radius: 3px;
   cursor: pointer;
   line-height: 1;
+  font-size: 14px;
 }
 .slipway-file-tree .ft-action:hover {
   background: var(--bg-panel);
   color: var(--fg);
-}
-/* Touch: keep actions always visible since hover doesn't apply. */
-@media (hover: none) {
-  .slipway-file-tree .ft-actions { display: flex; opacity: 0.7; }
 }
 
 /* Preview pane (rendered inside a Dockview panel) — keep the placeholder

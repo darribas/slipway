@@ -230,6 +230,12 @@ UX notes worth flagging:
 - Delete uses `window.confirm()`. Same comment.
 - No drag-and-drop reorder / move yet — would build on Dockview's DnD primitives but is its own increment.
 
+### Increment 4.1: File-tree actions always visible
+
+User feedback: "how do I rename on touch?" The action icons (✎ rename, × delete, + new-file-in-folder) were hidden by default and only revealed on hover, with a `@media (hover: none)` fallback meant to keep them visible on touch devices. iOS Safari reports `hover: none` inconsistently (especially when an iPad is paired with a keyboard or trackpad), so on the user's iPhone the icons weren't appearing at all and there was no obvious way to discover them.
+
+Fix: drop the hover gate entirely. Actions are now always-visible at 0.45 opacity, brightening to full on row hover / focus. Touch-target size bumped to 28×28 px. ~10 lines of CSS, no logic change. Smoke test still 10/10.
+
 -----
 
 ## Repo cleanup (deferred)
