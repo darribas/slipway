@@ -281,6 +281,17 @@ Old `readQmd` / `saveQmd` helpers in `project.ts` are now thin wrappers supersed
 
 Smoke test still 12/12. Browser e2e confirms: clicking the imago `.scss` in the tree opens it in the editor; the toolbar's deck status survives the navigation; hitting Render still renders the last-touched `.qmd`.
 
+### Increment 6: Vim bindings
+
+Per the spec's editor section: vim bindings always-on, via `@replit/codemirror-vim`.
+
+- The package's `vim()` extension is prepended to CodeMirror's extension array so its keymap binds before the standard one. Single-key normal-mode bindings (`hjkl`, `i`, `:`, `/`, …) win; modifier shortcuts (`Cmd+S`, `Cmd+R`) keep working because vim doesn't intercept those.
+- Ex commands wired to our existing save handler: `:w`, `:write`, `:up`, `:update`, `:wq`, `:x` all call `opts.onSave`. We have no buffer-close concept, so the `:q`-variants are effectively save aliases — useful for keyboard users who type `:wq` reflexively.
+- Status line is built into the extension; it appears at the bottom of the editor only when you type `:` or `/`, so it stays out of the way otherwise.
+- Snapshot-at-construction approach for themes / vim — a reload picks up changes; no live runtime toggle needed.
+
+Smoke test: no new assertions (vim is editor-only, doesn't touch the render pipeline). 23/23 still passing. Build + light/dark e2e screenshots show the vim normal-mode block cursor present and the editor chrome unchanged.
+
 ### Increment 5e: Honour the YAML's theme: / bibliography: declarations
 
 User caught a fragility: the seed `.qmd` declares `theme: ../assets/imago.scss` but the actual file lives at `assets/imago.scss` (the seed flattened the workshop's `slides/` directory). The renderer was accidentally working because `buildRenderInputs` ignored the YAML declarations entirely and globbed for the first `.scss` it found — fine with one stylesheet, surprising as soon as a project has two.

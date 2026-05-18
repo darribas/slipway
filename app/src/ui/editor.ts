@@ -5,6 +5,7 @@ import { yaml as yamlLang } from "@codemirror/lang-yaml";
 import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, foldGutter, LanguageDescription } from "@codemirror/language";
 import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { vim, Vim } from "@replit/codemirror-vim";
 
 export interface EditorHandle {
   view: EditorView;
@@ -22,6 +23,17 @@ export interface EditorOptions {
 }
 
 export function createEditor(opts: EditorOptions): EditorHandle {
+  // Wire ex commands once per process — Vim.defineEx is global. Doing this
+  // inside createEditor (rather than at module load) means the latest
+  // onSave / onRender closures get used; the global registry just stores
+  // the most recent definition.
+  Vim.defineEx("write", "w", () => opts.onSave?.());
+  Vim.defineEx("update", "up", () => opts.onSave?.());
+  // :wq and :x save then "quit" — we have no buffer to close, so they're
+  // effectively just save aliases.
+  Vim.defineEx("wq", "wq", () => opts.onSave?.());
+  Vim.defineEx("xit", "x", () => opts.onSave?.());
+
   // The previous build relied on CodeMirror's defaultHighlightStyle, which is
   // designed for white backgrounds. In light mode, Dockview's panel
   // background bled through (no explicit bg set), giving dark-on-dark text
@@ -31,6 +43,11 @@ export function createEditor(opts: EditorOptions): EditorHandle {
   const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
   const extensions: Extension[] = [
+    // Vim must come first so its keymap binds before the standard ones —
+    // this lets normal-mode bindings (hjkl, :, etc.) take precedence.
+    // Cmd/Ctrl shortcuts still reach our keymap.of() below because vim only
+    // intercepts non-modifier keystrokes.
+    vim(),
     history(),
     lineNumbers(),
     highlightActiveLine(),
