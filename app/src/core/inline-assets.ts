@@ -75,10 +75,14 @@ export function injectRevealConfigOverride(html: string, opts: Record<string, un
   });
 })();
 </script>`;
-  // Insert before </body> if present; append otherwise.
-  return /<\/body>/i.test(html)
-    ? html.replace(/<\/body>/i, `${script}\n</body>`)
-    : html + script;
+  // Insert before the LAST `</body>`. A naive first-match regex can land
+  // inside an inlined plugin script that happens to contain `</body>` as a
+  // string literal (reveal.js's notes plugin embeds `"</body>\n</html>"`
+  // when constructing the speaker-view popup), which splits the plugin in
+  // half and breaks the whole bundle.
+  const lastBody = html.lastIndexOf("</body>");
+  if (lastBody < 0) return html + script;
+  return html.slice(0, lastBody) + script + "\n" + html.slice(lastBody);
 }
 
 /**

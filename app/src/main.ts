@@ -1,10 +1,10 @@
 import "dockview-core/dist/styles/dockview.css";
 import "./ui/styles.css";
 
-import { DockviewComponent, type IContentRenderer } from "dockview-core";
+import { DockviewComponent, type IContentRenderer, type IDockviewPanel } from "dockview-core";
 
 import { mountLayout } from "./ui/layout";
-import { createEditor, type EditorHandle } from "./ui/editor";
+import { createEditor, languageFor, type EditorHandle } from "./ui/editor";
 import { PreviewPane } from "./ui/preview";
 import { createFileTree } from "./ui/file-tree";
 
@@ -35,14 +35,25 @@ import {
 
 const AUTOSAVE_MS = 2_000;
 
+// One per file open in the editor area. Each tab is its own Dockview panel
+// containing a fresh CodeMirror instance — so each file has its own undo
+// history, vim mode state, scroll position, and autosave timer. The
+// `componentId` is a stable handle Dockview uses; `path` is the (mutable on
+// rename) project path the editor reads from / writes to.
+interface OpenEditor {
+  path: string;
+  componentId: string;
+  handle: EditorHandle;
+  container: HTMLElement;
+  panel: IDockviewPanel;
+  autosaveTimer: ReturnType<typeof setTimeout> | null;
+  pendingSave: Promise<void> | null;
+}
+
 async function main(): Promise<void> {
   const layout = mountLayout(document.getElementById("app")!);
 
-  // Request persistent storage so OPFS contents survive eviction. Best-effort:
-  // some browsers gate this behind heuristics; ignore the resolved value.
-  if (navigator.storage?.persist) {
-    void navigator.storage.persist();
-  }
+  if (navigator.storage?.persist) void navigator.storage.persist();
 
   layout.setStatus("Seeding project…");
   let wasSeeded = false;
@@ -55,21 +66,8 @@ async function main(): Promise<void> {
   }
   if (wasSeeded) layout.setStatus("Seeded with imago workshop template");
 
-  const initialQmds = await listQmds();
-  const initialQmd: string | null = initialQmds[0] ?? null;
-  if (!initialQmd) {
-    layout.setStatus("No .qmd files in project — import a zip or create one", "warn");
-  } else {
-    setActiveQmd(initialQmd);
-    setActiveEditor(initialQmd);
-  }
+  // ---- Dock + per-file editor state ---------------------------------------
 
-  // Build the editor, preview, and file-tree into their own DOM containers,
-  // then hand each one to Dockview as panel content. Dockview moves these
-  // around during dock/tab/split operations; CodeMirror, the iframe, and the
-  // tree all handle resulting size changes.
-  const editorContainer = document.createElement("div");
-  editorContainer.style.cssText = "height:100%;width:100%;display:flex;flex-direction:column;min-height:0";
   const previewContainer = document.createElement("div");
   previewContainer.style.cssText = "height:100%;width:100%;position:relative";
   const filesContainer = document.createElement("div");
@@ -78,22 +76,16 @@ async function main(): Promise<void> {
   const previewPane = new PreviewPane(previewContainer);
   let lastRenderedHtml: string | null = null;
 
-  const editor = createEditor({
-    parent: editorContainer,
-    initialDoc: initialQmd ? await readFile(initialQmd) : "",
-    onChange: () => {
-      layout.setStale(true);
-      scheduleAutosave(editor);
-    },
-    onSave: () => void manualSave(editor, layout),
-    onRender: () => void runRender(),
-  });
-
+  // Open editors keyed by current path. Each one also pushes a renderer
+  // into `containerRenderers` under its `componentId` so Dockview can
+  // find the right container in the createComponent factory.
+  const opens = new Map<string, OpenEditor>();
   const containerRenderers: Record<string, IContentRenderer> = {
     files: { element: filesContainer, init: () => {} },
-    editor: { element: editorContainer, init: () => {} },
     preview: { element: previewContainer, init: () => {} },
   };
+  let nextEditorId = 1;
+
   const dock = new DockviewComponent(layout.paneHost, {
     createComponent: (options) => {
       const renderer = containerRenderers[options.name];
@@ -101,38 +93,66 @@ async function main(): Promise<void> {
       return renderer;
     },
   });
-  const filesPanel = dock.addPanel({
-    id: "files",
-    component: "files",
-    title: "Files",
-  });
-  const editorPanel = dock.addPanel({
-    id: "editor",
-    component: "editor",
-    title: initialQmd ?? "(no file)",
-    position: { referencePanel: "files", direction: "right" },
-  });
+  const filesPanel = dock.addPanel({ id: "files", component: "files", title: "Files" });
   dock.addPanel({
     id: "preview",
     component: "preview",
     title: "Preview",
-    position: { referencePanel: "editor", direction: "right" },
+    position: { referencePanel: "files", direction: "right" },
   });
   filesPanel.api.setSize({ width: 220 });
   const resizeDock = () => dock.layout(layout.paneHost.clientWidth, layout.paneHost.clientHeight);
   resizeDock();
   window.addEventListener("resize", resizeDock);
 
+  // Dock-level events dispatch to whichever OpenEditor owns the panel id.
+  // Doing it here (rather than per-panel) keeps the lifecycle in one place
+  // and dodges Dockview's per-panel api not exposing a dispose hook.
+  dock.onDidActivePanelChange((panel) => {
+    if (!panel) return;
+    const open = findOpenByComponentId(panel.id);
+    if (!open) return;
+    setActiveEditor(open.path);
+    if (open.path.toLowerCase().endsWith(".qmd")) setActiveQmd(open.path);
+    fileTree.setActive(open.path);
+  });
+  dock.onDidRemovePanel((panel) => {
+    const open = findOpenByComponentId(panel.id);
+    if (!open) return;
+    if (open.autosaveTimer) clearTimeout(open.autosaveTimer);
+    // Best-effort flush so a close right after typing doesn't lose
+    // the last few keystrokes.
+    void saveFile(open.path, open.handle.getDoc()).catch(() => {});
+    opens.delete(open.path);
+    delete containerRenderers[open.componentId];
+    if (getActiveEditor() === open.path) {
+      const next = opens.values().next().value as OpenEditor | undefined;
+      setActiveEditor(next?.path ?? null);
+      if (!next) fileTree.setActive(null);
+    }
+  });
+
+  function findOpenByComponentId(id: string): OpenEditor | null {
+    for (const o of opens.values()) if (o.componentId === id) return o;
+    return null;
+  }
+
+  // ---- File tree wiring ----------------------------------------------------
+
   const fileTree = createFileTree(filesContainer, {
     onOpen: (path) => void openFile(path),
     onRename: async (oldPath, newPath) => {
       try {
-        await flushAutosave(editor);
+        const open = opens.get(oldPath);
+        if (open) await flushAutosave(open);
         await rename(oldPath, newPath);
-        if (getActiveEditor() === oldPath) {
-          setActiveEditor(newPath);
-          editorPanel.api.setTitle(newPath);
+        if (open) {
+          opens.delete(oldPath);
+          open.path = newPath;
+          opens.set(newPath, open);
+          open.panel.api.setTitle(newPath);
         }
+        if (getActiveEditor() === oldPath) setActiveEditor(newPath);
         if (getActiveQmd() === oldPath) setActiveQmd(newPath);
         await refreshTree();
         layout.setStatus(`Renamed → ${newPath}`, "ok");
@@ -142,24 +162,14 @@ async function main(): Promise<void> {
     },
     onDelete: async (path) => {
       try {
+        // Close any open tab for this file first (the panel's onWillRemove
+        // handler keeps `opens` in sync). Then delete from storage.
+        const open = opens.get(path);
+        if (open) dock.removePanel(open.panel);
         await remove(path);
-        const editorWasActive = getActiveEditor() === path;
-        const qmdWasActive = getActiveQmd() === path;
-        if (qmdWasActive) {
+        if (getActiveQmd() === path) {
           const remainingQmds = (await listQmds()).filter((p) => p !== path);
           setActiveQmd(remainingQmds[0] ?? null);
-        }
-        if (editorWasActive) {
-          const fallback = getActiveQmd();
-          if (fallback) {
-            editor.setDoc(await readFile(fallback));
-            setActiveEditor(fallback);
-            editorPanel.api.setTitle(fallback);
-          } else {
-            setActiveEditor(null);
-            editor.setDoc("");
-            editorPanel.api.setTitle("(no file)");
-          }
         }
         await refreshTree();
         layout.setStatus(`Deleted ${path}`, "ok");
@@ -176,8 +186,6 @@ async function main(): Promise<void> {
         }
         await writeText(path, "");
         await refreshTree();
-        // Open the new file in the editor if it looks like text the user
-        // probably wants to start typing into. Stays unopened for binary.
         if (isTextFile(path)) await openFile(path);
         layout.setStatus(`Created ${path}`, "ok");
       } catch (e) {
@@ -185,9 +193,8 @@ async function main(): Promise<void> {
       }
     },
     onCreateFolder: async (parentDir, name) => {
-      // IDB has no real directories — we model them with a .placeholder file
-      // so the tree can render an empty folder. The placeholder is filtered
-      // out of the displayed list.
+      // IDB has no real directories — model empty folders with a .placeholder
+      // stub that the tree filter hides.
       const placeholder = `${joinPath(parentDir, name)}/.placeholder`;
       try {
         await writeText(placeholder, "");
@@ -199,22 +206,64 @@ async function main(): Promise<void> {
     },
   });
 
+  // ---- Editor lifecycle ----------------------------------------------------
+
   async function openFile(path: string): Promise<void> {
     if (!isTextFile(path)) {
       layout.setStatus(`${path} isn't a text file — open skipped`, "warn");
       return;
     }
-    await flushAutosave(editor);
-    editor.setDoc(await readFile(path));
+    const existing = opens.get(path);
+    if (existing) {
+      existing.panel.api.setActive();
+      return;
+    }
+    const componentId = `editor-${nextEditorId++}`;
+    const container = document.createElement("div");
+    container.style.cssText = "height:100%;width:100%;display:flex;flex-direction:column;min-height:0";
+    containerRenderers[componentId] = { element: container, init: () => {} };
+
+    const open: OpenEditor = {
+      path,
+      componentId,
+      container,
+      handle: undefined as unknown as EditorHandle,
+      panel: undefined as unknown as IDockviewPanel,
+      autosaveTimer: null,
+      pendingSave: null,
+    };
+    open.handle = createEditor({
+      parent: container,
+      initialDoc: await readFile(path),
+      language: languageFor(path),
+      onChange: () => {
+        if (open.path.toLowerCase().endsWith(".qmd")) layout.setStale(true);
+        scheduleAutosave(open);
+      },
+      onSave: () => void manualSave(open),
+      onRender: () => void runRender(),
+    });
+
+    // First editor sits between Files and Preview; subsequent ones stack
+    // as tabs in the first editor's group, wherever the user has dragged it.
+    const anyExisting = opens.values().next().value as OpenEditor | undefined;
+    const position = anyExisting
+      ? { referenceGroup: anyExisting.panel.group }
+      : { referencePanel: "files", direction: "right" as const };
+    open.panel = dock.addPanel({
+      id: componentId,
+      component: componentId,
+      title: path,
+      position,
+    });
+    // Active-change + removal are wired at dock-level above; nothing to hook
+    // per-panel here.
+    opens.set(path, open);
     setActiveEditor(path);
-    // Only .qmd files become the deck target. Editing other files (theme,
-    // bib, etc.) leaves the previous active deck in place so Render still
-    // works as expected.
     if (path.toLowerCase().endsWith(".qmd")) {
       setActiveQmd(path);
       layout.setStale(true);
     }
-    editorPanel.api.setTitle(path);
     fileTree.setActive(path);
     layout.setStatus(`Opened ${path}`);
   }
@@ -223,8 +272,6 @@ async function main(): Promise<void> {
     const all = await listFiles();
     fileTree.refresh(
       all.filter((p) => {
-        // Hide dot-prefixed filenames (.seeded marker, .placeholder folder
-        // stubs, .DS_Store leftovers from zip imports).
         const segments = p.split("/");
         return !segments[segments.length - 1].startsWith(".");
       }),
@@ -234,6 +281,16 @@ async function main(): Promise<void> {
 
   await refreshTree();
 
+  // Open the first .qmd at boot so the user lands in a familiar place.
+  const initialQmds = await listQmds();
+  if (initialQmds[0]) {
+    await openFile(initialQmds[0]);
+  } else {
+    layout.setStatus("No .qmd files in project — import a zip or create one", "warn");
+  }
+
+  // ---- Toolbar wiring ------------------------------------------------------
+
   layout.renderBtn.addEventListener("click", () => void runRender());
 
   layout.importInput.addEventListener("change", async () => {
@@ -241,6 +298,8 @@ async function main(): Promise<void> {
     if (!file) return;
     layout.setStatus(`Importing ${file.name}…`);
     try {
+      // Close every open tab — the files behind them are about to be wiped.
+      for (const open of [...opens.values()]) dock.removePanel(open.panel);
       const { filesWritten } = await importZip(file);
       layout.setStatus(`Imported ${filesWritten} files`, "ok");
       const qmds = await listQmds();
@@ -248,8 +307,7 @@ async function main(): Promise<void> {
         await openFile(qmds[0]);
       } else {
         setActiveQmd(null);
-        editor.setDoc("");
-        editorPanel.api.setTitle("(no file)");
+        setActiveEditor(null);
         layout.setStatus("Imported zip contains no .qmd files", "warn");
       }
       await refreshTree();
@@ -261,7 +319,7 @@ async function main(): Promise<void> {
   });
 
   layout.exportBtn.addEventListener("click", async () => {
-    await flushAutosave(editor);
+    await flushAllAutosaves();
     layout.setStatus("Exporting…");
     try {
       const blob = await exportZip();
@@ -276,7 +334,8 @@ async function main(): Promise<void> {
     if (lastRenderedHtml) previewPane.openInNewTab(lastRenderedHtml);
   });
 
-  // Kick off pandoc download in the background so the first Render is fast.
+  // ---- Pandoc loading ------------------------------------------------------
+
   layout.setStatus("Loading pandoc.wasm…");
   void getPandoc((loaded, total) => {
     if (total > 0) {
@@ -288,10 +347,12 @@ async function main(): Promise<void> {
     .then(() => layout.setStatus("Ready", "ok"))
     .catch((e) => layout.setStatus(`pandoc load failed: ${msgOf(e)}`, "error"));
 
+  // ---- Render --------------------------------------------------------------
+
   async function runRender(): Promise<void> {
     const path = getActiveQmd();
     if (!path) return;
-    await flushAutosave(editor);
+    await flushAllAutosaves();
     layout.renderBtn.disabled = true;
     layout.setStatus("Rendering…");
     try {
@@ -304,18 +365,13 @@ async function main(): Promise<void> {
       layout.setStale(false);
       const warn = result.warnings.length ? ` (${result.warnings.length} warnings)` : "";
       layout.setStatus(`Rendered in ${Math.round(result.durationMs)}ms${warn}`, "ok");
-      // Surface warning details as a tooltip on the status text (long-press
-      // on iPad, hover on desktop). Logged to the console too so they're
-      // visible in dev tools when needed.
       if (result.warnings.length) {
         layout.status.title = result.warnings.join("\n");
         console.warn("render warnings:\n" + result.warnings.join("\n"));
       } else {
         layout.status.title = "";
       }
-      if (result.stderr.trim()) {
-        console.warn("render stderr:", result.stderr);
-      }
+      if (result.stderr.trim()) console.warn("render stderr:", result.stderr);
     } catch (e) {
       layout.setStatus(`Render failed: ${msgOf(e)}`, "error");
       console.error(e);
@@ -323,43 +379,38 @@ async function main(): Promise<void> {
       layout.renderBtn.disabled = false;
     }
   }
-}
 
-// ---- Autosave -------------------------------------------------------------
+  // ---- Autosave (per-editor) ----------------------------------------------
 
-let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingSave: Promise<void> | null = null;
-
-function scheduleAutosave(editor: EditorHandle): void {
-  if (autosaveTimer) clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => {
-    autosaveTimer = null;
-    pendingSave = saveActive(editor);
-  }, AUTOSAVE_MS);
-}
-
-async function flushAutosave(editor: EditorHandle): Promise<void> {
-  if (autosaveTimer) {
-    clearTimeout(autosaveTimer);
-    autosaveTimer = null;
-    pendingSave = saveActive(editor);
+  function scheduleAutosave(open: OpenEditor): void {
+    if (open.autosaveTimer) clearTimeout(open.autosaveTimer);
+    open.autosaveTimer = setTimeout(() => {
+      open.autosaveTimer = null;
+      open.pendingSave = saveFile(open.path, open.handle.getDoc());
+    }, AUTOSAVE_MS);
   }
-  if (pendingSave) await pendingSave;
+
+  async function flushAutosave(open: OpenEditor): Promise<void> {
+    if (open.autosaveTimer) {
+      clearTimeout(open.autosaveTimer);
+      open.autosaveTimer = null;
+      open.pendingSave = saveFile(open.path, open.handle.getDoc());
+    }
+    if (open.pendingSave) await open.pendingSave;
+  }
+
+  async function flushAllAutosaves(): Promise<void> {
+    await Promise.all([...opens.values()].map(flushAutosave));
+  }
+
+  async function manualSave(open: OpenEditor): Promise<void> {
+    await flushAutosave(open);
+    await saveFile(open.path, open.handle.getDoc());
+    layout.setStatus(`Saved ${open.path}`, "ok");
+  }
 }
 
-async function manualSave(editor: EditorHandle, layout: ReturnType<typeof mountLayout>): Promise<void> {
-  await flushAutosave(editor);
-  await saveActive(editor);
-  layout.setStatus("Saved", "ok");
-}
-
-async function saveActive(editor: EditorHandle): Promise<void> {
-  const path = getActiveEditor();
-  if (!path) return;
-  await saveFile(path, editor.getDoc());
-}
-
-// ---- Helpers --------------------------------------------------------------
+// ---- Helpers ---------------------------------------------------------------
 
 function joinPath(parentDir: string, name: string): string {
   const safeName = name.replace(/^\/+/, "").replace(/\/+/g, "/");
@@ -411,9 +462,6 @@ async function showStartupError(e: unknown): Promise<void> {
     diag = `(capability probe also failed: ${probeErr instanceof Error ? probeErr.message : String(probeErr)})`;
   }
 
-  // Always render a full-width banner — the toolbar status text gets
-  // truncated by ellipsis on narrow viewports (e.g. iPad portrait), which
-  // hides the actual message.
   const banner = document.createElement("div");
   banner.className = "slipway-error-banner";
   banner.innerHTML = `
@@ -438,8 +486,6 @@ async function showStartupError(e: unknown): Promise<void> {
       await navigator.clipboard.writeText(text);
       (banner.querySelector(".copy") as HTMLButtonElement).textContent = "Copied";
     } catch {
-      // Clipboard API can fail in non-secure contexts or without user gesture.
-      // Fall back to selecting the diag block so the user can long-press copy.
       const range = document.createRange();
       range.selectNodeContents(banner.querySelector(".diag")!);
       const sel = window.getSelection();
@@ -449,7 +495,6 @@ async function showStartupError(e: unknown): Promise<void> {
   });
   document.body.insertBefore(banner, document.body.firstChild);
 
-  // Also colour-flag the status text if the toolbar managed to mount.
   const status = document.querySelector(".slipway-toolbar .status");
   if (status) {
     status.textContent = "Startup failed (see banner)";

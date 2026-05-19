@@ -285,6 +285,20 @@ Old `readQmd` / `saveQmd` helpers in `project.ts` are now thin wrappers supersed
 
 Smoke test still 12/12. Browser e2e confirms: clicking the imago `.scss` in the tree opens it in the editor; the toolbar's deck status survives the navigation; hitting Render still renders the last-touched `.qmd`.
 
+### Increment 8: Multi-tab editor + CSS syntax for `.scss` / `.css`
+
+User asked for multiple files open at once, plus syntax highlighting for non-`.qmd` text files. Both ship together — they're adjacent to each other and to the editor refactor either one needs.
+
+**Multi-tab editor.** `main.ts` now manages an `opens: Map<path, OpenEditor>` instead of a singleton editor. Each open file gets its own Dockview panel with its own CodeMirror instance, its own undo history, scroll position, vim state, and autosave timer. Tabs live in the editor group; user can drag-reorder, drag-out-to-split, or close them with the × button. Active-tab change is wired through Dockview's `onDidActivePanelChange`; panel removal through `onDidRemovePanel` (with a best-effort save flush on close so a quick edit-then-close doesn't lose keystrokes). Rename of an open file updates its tab title in place; delete closes the tab; zip import closes every open tab before clearing storage.
+
+A subtle nuance worth flagging: switching tabs to a `.qmd` updates the *active deck* (what Render targets) too. Switching to a `.scss` / `.bib` / `.yaml` does not — so you can pop over to the theme file, tweak it, and hit Render to see the deck you were just looking at, the way Phase 2 / 5b already promised.
+
+**Syntax highlighting.** `@codemirror/lang-css` added. New `languageFor(path)` helper in `editor.ts` picks the right CodeMirror language: markdown for `.qmd` / `.md`, CSS for `.scss` / `.css` / `.sass` (SCSS is a CSS superset; lang-css highlights selectors, properties, values, hex colours, and `@import` rules — the Sass-only `$var` syntax doesn't get a special colour but everything else does), YAML for `.yaml` / `.yml`. `.bib` opens as plain text — no maintained CodeMirror language pack exists. New `language` option on `createEditor` so each open editor picks the right one.
+
+**Regression caught + locked down.** First version of the override-script injector (from increment 7) used `html.replace(/<\/body>/i, …)` to insert before `</body>`. Reveal.js's notes plugin embeds the literal string `"</body>\n</html>"` in its source (used when constructing the speaker-view popup), so the regex matched *inside* the inlined notes plugin source — splitting it in half and breaking the whole bundle, producing JS syntax errors and a preview pane showing literal JS as text. Fixed by switching to `lastIndexOf("</body>")` (the real close tag is always the last `</body>`). New smoke-test assertion locks this down: the override script's offset must come *after* the last inlined reveal.js asset.
+
+Smoke test: 25/25 passing.
+
 ### Increment 7: iPad viewport + YAML reveal.js options
 
 Two issues from deployed testing.

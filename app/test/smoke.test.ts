@@ -139,6 +139,21 @@ describe("imago workshop deck", () => {
     expect(html).toContain('"navigationMode":"linear"');
     expect(html).toContain('"controlsLayout":"bottom-right"');
   }, 30_000);
+
+  test("override script lands after inlined plugin source, not inside it", async () => {
+    // Regression guard: a previous build injected the override at the *first*
+    // </body> in the HTML. But reveal.js's notes plugin embeds the literal
+    // string "</body>\n</html>" when building the speaker-view popup, so the
+    // first match was inside an inlined script — splitting it in half and
+    // wrecking the whole bundle. The override must come after every inlined
+    // script tag.
+    const { html } = await renderDeck(pandoc, await loadInputs());
+    const overrideIdx = html.indexOf('data-from="slipway:user-reveal-config"');
+    const lastInlinedRevealAsset = html.lastIndexOf('data-from="https://unpkg.com/reveal.js@^5');
+    expect(overrideIdx).toBeGreaterThan(0);
+    expect(lastInlinedRevealAsset).toBeGreaterThan(0);
+    expect(overrideIdx).toBeGreaterThan(lastInlinedRevealAsset);
+  }, 30_000);
 });
 
 describe("frontmatter declaration extraction", () => {
