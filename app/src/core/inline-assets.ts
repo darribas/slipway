@@ -48,6 +48,44 @@ function escapeRegex(s: string): string {
 }
 
 /**
+ * Inject a Reveal.configure() call that overrides whatever reveal.js options
+ * pandoc's template chose to emit. This is the only reliable way to make
+ * boolean-false options like `controls: false` actually take effect: pandoc's
+ * template uses `$if(controls)$` to decide whether to emit the option, and
+ * `$if$` treats boolean false as "not set" — so pandoc silently falls back
+ * to reveal.js's default (which is true). Reveal.configure() runs after init
+ * and unconditionally applies whatever we hand it.
+ *
+ * If `opts` is empty, the original HTML is returned unchanged.
+ */
+export function injectRevealConfigOverride(html: string, opts: Record<string, unknown>): string {
+  if (!opts || Object.keys(opts).length === 0) return html;
+  const literal = JSON.stringify(opts);
+  const script = `<script data-from="slipway:user-reveal-config">
+(function () {
+  var opts = ${literal};
+  function apply() { if (window.Reveal && Reveal.configure) Reveal.configure(opts); }
+  if (window.Reveal && Reveal.isReady && Reveal.isReady()) apply();
+  else if (window.Reveal && Reveal.addEventListener) Reveal.addEventListener('ready', apply);
+  else document.addEventListener('DOMContentLoaded', function () {
+    if (window.Reveal) {
+      if (Reveal.isReady && Reveal.isReady()) apply();
+      else Reveal.addEventListener('ready', apply);
+    }
+  });
+})();
+</script>`;
+  // Insert before the LAST `</body>`. A naive first-match regex can land
+  // inside an inlined plugin script that happens to contain `</body>` as a
+  // string literal (reveal.js's notes plugin embeds `"</body>\n</html>"`
+  // when constructing the speaker-view popup), which splits the plugin in
+  // half and breaks the whole bundle.
+  const lastBody = html.lastIndexOf("</body>");
+  if (lastBody < 0) return html + script;
+  return html.slice(0, lastBody) + script + "\n" + html.slice(lastBody);
+}
+
+/**
  * Inline our compiled theme stylesheet into the rendered HTML.
  *
  * Pandoc emits `<link rel="stylesheet" href="theme.css">` in standalone

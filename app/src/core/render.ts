@@ -1,6 +1,7 @@
 import { compileScss } from "./sass";
 import { preprocessDeck } from "./preprocess";
-import { inlineRevealAssets, inlineThemeCss } from "./inline-assets";
+import { extractDeclarations } from "./frontmatter";
+import { injectRevealConfigOverride, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
 import type { PandocInstance, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
@@ -81,13 +82,18 @@ export async function renderDeck(
     else warnings.push(JSON.stringify(w));
   }
 
-  // Two post-pandoc inlining passes:
+  // Three post-pandoc passes:
   //   1. Reveal.js core + plugins (so the iframe has no external CDN deps)
   //   2. Our compiled theme.css (pandoc only emits a <link> pointing at the
-  //      VFS path, which the iframe can't resolve — see inlineThemeCss for
-  //      the full story).
+  //      VFS path, which the iframe can't resolve — see inlineThemeCss).
+  //   3. The user's `format.revealjs.*` options applied via Reveal.configure()
+  //      after init, so boolean-false options like `controls: false` actually
+  //      take effect (pandoc's template skips them — see
+  //      injectRevealConfigOverride).
+  const declared = extractDeclarations(inputs.qmd);
   let html = inlineRevealAssets(result.stdout);
   html = inlineThemeCss(html, css);
+  html = injectRevealConfigOverride(html, declared.revealjsOptions);
 
   return {
     html,

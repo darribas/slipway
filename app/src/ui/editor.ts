@@ -2,10 +2,37 @@ import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { yaml as yamlLang } from "@codemirror/lang-yaml";
+import { css as cssLang } from "@codemirror/lang-css";
 import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, foldGutter, LanguageDescription } from "@codemirror/language";
 import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { vim, Vim } from "@replit/codemirror-vim";
+
+/**
+ * Pick the CodeMirror language extension for a given file path. SCSS / CSS
+ * share lang-css (SCSS is a superset; lang-css highlights enough of the
+ * common surface — selectors, properties, values, comments — to be useful;
+ * Sass-specific things like `$vars` get the plain-identifier colour, which
+ * is fine for now). .bib has no maintained CodeMirror language package, so
+ * it opens as plain text.
+ */
+export function languageFor(path: string): Extension {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "qmd" || ext === "md" || ext === "markdown") {
+    return markdown({
+      codeLanguages: [
+        LanguageDescription.of({
+          name: "yaml",
+          alias: ["yml"],
+          load: async () => yamlLang(),
+        }),
+      ],
+    });
+  }
+  if (ext === "scss" || ext === "css" || ext === "sass") return cssLang();
+  if (ext === "yaml" || ext === "yml") return yamlLang();
+  return []; // plain text (no syntax highlighting, still fully editable)
+}
 
 export interface EditorHandle {
   view: EditorView;
@@ -17,6 +44,12 @@ export interface EditorHandle {
 export interface EditorOptions {
   parent: HTMLElement;
   initialDoc: string;
+  /**
+   * The CodeMirror language extension to use. Defaults to markdown so
+   * existing call sites don't change behaviour; pass `languageFor(path)` to
+   * pick automatically based on file extension.
+   */
+  language?: Extension;
   onChange?: (doc: string) => void;
   onSave?: () => void; // Cmd/Ctrl-S
   onRender?: () => void; // Cmd/Ctrl-R
@@ -58,15 +91,7 @@ export function createEditor(opts: EditorOptions): EditorHandle {
     // oneDark in dark mode (its built-in scheme includes the background too);
     // defaultHighlightStyle in light mode (designed for white).
     ...(isDark ? [oneDark] : [syntaxHighlighting(defaultHighlightStyle, { fallback: true })]),
-    markdown({
-      codeLanguages: [
-        LanguageDescription.of({
-          name: "yaml",
-          alias: ["yml"],
-          load: async () => yamlLang(),
-        }),
-      ],
-    }),
+    opts.language ?? languageFor("untitled.md"),
     EditorView.lineWrapping,
     keymap.of([
       ...defaultKeymap,

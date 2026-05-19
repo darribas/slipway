@@ -125,6 +125,35 @@ describe("imago workshop deck", () => {
     const { html } = await renderDeck(pandoc, await loadInputs());
     expect(html).toMatch(/class="[^"]*\bfragment\b/);
   }, 30_000);
+
+  test("user's format.revealjs options reach the deck via Reveal.configure()", async () => {
+    // The workshop deck has `controls-layout: 'bottom-right'`, `center: false`,
+    // `navigation-mode: linear` under format.revealjs. The first comes through
+    // pandoc's template natively; the latter two are boolean/keyword values
+    // that pandoc's $if$ skips when false — so we have to apply them via
+    // Reveal.configure() post-init. Assert the override script is present
+    // and carries the booleans the user set.
+    const { html } = await renderDeck(pandoc, await loadInputs());
+    expect(html).toContain('data-from="slipway:user-reveal-config"');
+    expect(html).toContain('"center":false');
+    expect(html).toContain('"navigationMode":"linear"');
+    expect(html).toContain('"controlsLayout":"bottom-right"');
+  }, 30_000);
+
+  test("override script lands after inlined plugin source, not inside it", async () => {
+    // Regression guard: a previous build injected the override at the *first*
+    // </body> in the HTML. But reveal.js's notes plugin embeds the literal
+    // string "</body>\n</html>" when building the speaker-view popup, so the
+    // first match was inside an inlined script — splitting it in half and
+    // wrecking the whole bundle. The override must come after every inlined
+    // script tag.
+    const { html } = await renderDeck(pandoc, await loadInputs());
+    const overrideIdx = html.indexOf('data-from="slipway:user-reveal-config"');
+    const lastInlinedRevealAsset = html.lastIndexOf('data-from="https://unpkg.com/reveal.js@^5');
+    expect(overrideIdx).toBeGreaterThan(0);
+    expect(lastInlinedRevealAsset).toBeGreaterThan(0);
+    expect(overrideIdx).toBeGreaterThan(lastInlinedRevealAsset);
+  }, 30_000);
 });
 
 describe("frontmatter declaration extraction", () => {
@@ -137,29 +166,50 @@ bibliography: refs.bib
 
 # Hi
 `;
-    expect(extractDeclarations(qmd)).toEqual({ theme: "weird/path.scss", bib: "refs.bib" });
+    expect(extractDeclarations(qmd)).toEqual({
+      theme: "weird/path.scss",
+      bib: "refs.bib",
+      revealjsOptions: {},
+    });
   });
 
-  test("nested format.revealjs.theme:", () => {
+  test("nested format.revealjs.theme: + other options lift to camelCase", () => {
     const qmd = `---
 title: A
 format:
   revealjs:
     theme: imago.scss
+    controls: false
+    controls-layout: bottom-right
+    navigation-mode: linear
+    center: false
 bibliography: refs.bib
 ---
 
 # Hi
 `;
-    expect(extractDeclarations(qmd)).toEqual({ theme: "imago.scss", bib: "refs.bib" });
+    expect(extractDeclarations(qmd)).toEqual({
+      theme: "imago.scss",
+      bib: "refs.bib",
+      revealjsOptions: {
+        controls: false,
+        controlsLayout: "bottom-right",
+        navigationMode: "linear",
+        center: false,
+      },
+    });
   });
 
   test("missing frontmatter is fine", () => {
-    expect(extractDeclarations("# Hi\nbody\n")).toEqual({ theme: null, bib: null });
+    expect(extractDeclarations("# Hi\nbody\n")).toEqual({ theme: null, bib: null, revealjsOptions: {} });
   });
 
   test("malformed YAML doesn't throw", () => {
-    expect(extractDeclarations("---\nthis: : : not yaml\n---\n")).toEqual({ theme: null, bib: null });
+    expect(extractDeclarations("---\nthis: : : not yaml\n---\n")).toEqual({
+      theme: null,
+      bib: null,
+      revealjsOptions: {},
+    });
   });
 });
 
