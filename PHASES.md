@@ -239,6 +239,10 @@ Reported during testing, queued for individual increments. Tick off as they ship
 - [ ] **[5c]** Zip import appears to drop non-`.qmd` files. User reports only the `.qmd` survives the import. Possibilities: real bug in `importZip` or its filtering, an auto-collapsed folder hiding what's actually there, or a missing tree refresh. Needs investigation with a real Quarto project zip + better post-import diagnostics ("Imported N files across M folders").
 - ✓ **[5d]** Renderer wasn't picking up the theme at all (not just the `.css` case). Real root cause was that pandoc emitted a `<link>` referencing the WASI VFS path which the iframe couldn't resolve — see increment 5b/d below.
 - ✓ **[5e]** Renderer ignored the YAML's `theme:` declaration and just globbed for the first `.scss`. The seed deck declared `theme: ../assets/imago.scss` but the renderer never read that — it accidentally worked because there was only one `.scss` in the project. Fragile if multiple stylesheets exist or one gets renamed. Fixed by `resolveDeclaredPath` (see increment 5e below).
+- ✓ **[7a]** iPad PWA viewport overflow — toolbar scrolled off-screen when editor scrolled to bottom. See increment 7.
+- ✓ **[7b]** YAML `format.revealjs.*` options (notably booleans like `controls: false`) silently ignored. See increment 7.
+- [ ] **[wish-1]** A subtle UI affordance to toggle vim bindings on/off (e.g., a tiny status-bar icon). Spec said "vim always-on" but live testing surfaces cases where switching off would help.
+- [ ] **[wish-2]** Offline-readiness indicator in the chrome — a small plane / cloud icon that goes green when everything's cached locally (pandoc.wasm, reveal.js, sass, template). Implicitly tied to Phase 3's service worker; can ship a placeholder indicator now that flips green once the SW reports its cache state.
 
 ### Increment 4.1: File-tree actions always visible
 
@@ -280,6 +284,26 @@ Smoke test gets two new assertions: rendered HTML contains the imago navy colour
 Old `readQmd` / `saveQmd` helpers in `project.ts` are now thin wrappers superseded by `readFile` / `saveFile`.
 
 Smoke test still 12/12. Browser e2e confirms: clicking the imago `.scss` in the tree opens it in the editor; the toolbar's deck status survives the navigation; hitting Render still renders the last-touched `.qmd`.
+
+### Increment 7: iPad viewport + YAML reveal.js options
+
+Two issues from deployed testing.
+
+**7a — iPad PWA viewport overflow.** When installed to Home Screen, scrolling to the bottom of the editor pushed the toolbar off-screen because `#app { height: 100vh }` is taller than the visible viewport on iOS (vh counts the off-screen URL bar even when there isn't one in PWA mode). Fix:
+
+- `index.html` gets `viewport-fit=cover` on the viewport meta + the `apple-mobile-web-app-capable` / `apple-mobile-web-app-status-bar-style` / `apple-mobile-web-app-title` tags so iOS recognises this as a PWA.
+- `styles.css` switches `#app` to `100dvh` (dynamic viewport height — accounts for actual visible area on iOS), with a `100vh` fallback. `html, body` pinned with `position: fixed; inset: 0` so touch scrolls in CodeMirror can't bubble up to the document.
+- `overscroll-behavior: contain` on the toolbar, pane area, and CodeMirror's `.cm-scroller` to stop swipe-scroll leak.
+- Safe-area-inset padding on `#app` so toolbar / file tree / preview don't sit under the iPad status bar or home indicator.
+
+**7b — YAML reveal.js options weren't applying.** User couldn't disable navigation arrows via `controls: false`. Two root causes:
+
+1. The user's options live under `format.revealjs.*` (nested), but pandoc's revealjs template reads metadata at top level. Some keys (e.g., `controls-layout: 'bottom-right'`) come through anyway because pandoc inherits them down, but plain top-level reads miss the nested form.
+2. More fundamentally, pandoc's template uses `$if(controls)$` to decide whether to emit `controls: $controls$,` in the `Reveal.initialize()` call. `$if$` treats YAML boolean `false` as "not set", so `controls: false` is silently dropped and reveal.js falls back to its default (`true`).
+
+Fix: `extractDeclarations` now also returns a `revealjsOptions` map containing every `format.revealjs.*` key (excluding `theme`), with kebab-case converted to camelCase. `render.ts` calls a new `injectRevealConfigOverride(html, opts)` post-pandoc, which inserts a small `<script>` before `</body>` that runs `Reveal.configure(opts)` once Reveal is ready. Reveal.configure applies whatever we hand it unconditionally — `controls: false` actually disables the arrows.
+
+Smoke test gains an end-to-end assertion: rendered HTML must contain the override script with the workshop deck's `center: false`, `navigationMode: "linear"`, `controlsLayout: "bottom-right"`. Frontmatter unit tests updated to cover the new `revealjsOptions` field. 24/24 passing.
 
 ### Increment 6: Vim bindings
 
