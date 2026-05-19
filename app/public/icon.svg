@@ -1,0 +1,13 @@
+<!-- Slipway favicon master.
+     Sky-and-sand palette, shallow slipway ramp at the bottom, slide outline
+     poised on it. Rounded corners (rx≈22% of canvas) so browser favicons
+     and tab icons get the soft-corner treatment without needing OS rounding.
+     The PNG variants used for apple-touch-icon and the PWA manifest are
+     generated from a square-bleed version of this design — see
+     scripts/render-icons.mjs. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#B8D6EE"/>
+  <path d="M0 56 L64 38 L64 64 L0 64 Z" fill="#F0D5B5"/>
+  <rect x="18" y="22" width="28" height="20" rx="2"
+        fill="none" stroke="#3a4a52" stroke-width="2.5"/>
+</svg>
