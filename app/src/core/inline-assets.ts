@@ -48,6 +48,24 @@ function escapeRegex(s: string): string {
 }
 
 /**
+ * Inline our compiled theme stylesheet into the rendered HTML.
+ *
+ * Pandoc emits `<link rel="stylesheet" href="theme.css">` in standalone
+ * output when we pass `css: ["theme.css"]`, but the actual file lives in
+ * pandoc's WASI VFS — *not* anywhere the iframe (srcdoc) can resolve. So
+ * the link tag pointed nowhere and the theme silently failed to apply.
+ * This pass swaps the link for an inline <style> block carrying the CSS
+ * we compiled (or read directly when the source was already .css).
+ */
+export function inlineThemeCss(html: string, css: string): string {
+  if (!css) return html;
+  const re = /<link\b[^>]*href=["']theme\.css["'][^>]*\/?>/g;
+  return html.replace(re, () =>
+    `<style data-from="theme.css">\n${css}\n</style>`,
+  );
+}
+
+/**
  * Replace every <link>/<script> in `html` that points at one of our known
  * reveal.js CDN URLs with an inline <style>/<script> block. Returns the
  * rewritten HTML; leaves unrecognised external references alone.

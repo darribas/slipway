@@ -18,6 +18,8 @@ import { describe, expect, test } from "vitest";
 import { convert } from "pandoc-wasm";
 
 import { renderDeck } from "../src/core/render";
+import { extractDeclarations } from "../src/core/frontmatter";
+import { resolveDeclaredPath } from "../src/core/path-resolve";
 import type { PandocInstance, RenderInputs } from "../src/core/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +34,8 @@ async function loadInputs(): Promise<RenderInputs> {
   ]);
   return {
     qmd,
-    scss,
+    stylesheet: scss,
+    stylesheetIsPrecompiled: false,
     bib,
     assets: new Map([["attention_paper.png", new Uint8Array(png)]]),
   };
@@ -55,7 +58,27 @@ describe("imago workshop deck", () => {
   test("includes reveal.js + the compiled imago theme", async () => {
     const { html } = await renderDeck(pandoc, await loadInputs());
     expect(html).toMatch(/reveal\.js/);
-    expect(html).toMatch(/<link[^>]*theme\.css/);
+    // The theme.css used to be a dangling <link> pointing at the WASI VFS
+    // path, so the iframe could never resolve it. Post-pandoc we now inline
+    // the compiled CSS as a <style data-from="theme.css"> block. Assert both
+    // the wrapper and recognisable imago palette colours from the SCSS so we
+    // catch silent regressions of the inlining pass.
+    expect(html).toContain('data-from="theme.css"');
+    expect(html.toLowerCase()).toContain("#24226f"); // imago navy
+    expect(html).toContain("Figtree"); // imago font family
+  }, 30_000);
+
+  test("accepts a pre-compiled .css stylesheet as-is", async () => {
+    const inputs: RenderInputs = {
+      qmd: "---\ntitle: CSS probe\n---\n\n# Hi\n",
+      stylesheet: ".reveal { --probe-marker: rgb(123,45,67); }",
+      stylesheetIsPrecompiled: true,
+      bib: null,
+      assets: new Map(),
+    };
+    const { html } = await renderDeck(pandoc, inputs);
+    expect(html).toContain('data-from="theme.css"');
+    expect(html).toContain("--probe-marker: rgb(123,45,67)");
   }, 30_000);
 
   test("inlines reveal.js — no external <link>/<script> refs left in the deck", async () => {
@@ -102,6 +125,92 @@ describe("imago workshop deck", () => {
     const { html } = await renderDeck(pandoc, await loadInputs());
     expect(html).toMatch(/class="[^"]*\bfragment\b/);
   }, 30_000);
+});
+
+describe("frontmatter declaration extraction", () => {
+  test("top-level theme: and bibliography:", () => {
+    const qmd = `---
+title: A
+theme: weird/path.scss
+bibliography: refs.bib
+---
+
+# Hi
+`;
+    expect(extractDeclarations(qmd)).toEqual({ theme: "weird/path.scss", bib: "refs.bib" });
+  });
+
+  test("nested format.revealjs.theme:", () => {
+    const qmd = `---
+title: A
+format:
+  revealjs:
+    theme: imago.scss
+bibliography: refs.bib
+---
+
+# Hi
+`;
+    expect(extractDeclarations(qmd)).toEqual({ theme: "imago.scss", bib: "refs.bib" });
+  });
+
+  test("missing frontmatter is fine", () => {
+    expect(extractDeclarations("# Hi\nbody\n")).toEqual({ theme: null, bib: null });
+  });
+
+  test("malformed YAML doesn't throw", () => {
+    expect(extractDeclarations("---\nthis: : : not yaml\n---\n")).toEqual({ theme: null, bib: null });
+  });
+});
+
+describe("resolveDeclaredPath", () => {
+  const tree = [
+    "slide.qmd",
+    "assets/imago.scss",
+    "assets/references.bib",
+    "themes/dark.scss",
+    "themes/light.scss",
+  ];
+
+  test("exact match wins", () => {
+    expect(resolveDeclaredPath("assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("strips leading ../ to resolve the imago workshop case", () => {
+    // The seed deck declares `theme: ../assets/imago.scss` because in the
+    // real workshop the qmd lives in `slides/`. Our IDB is flat from the
+    // project root, so the ../ has to be normalised away.
+    expect(resolveDeclaredPath("../assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("strips multiple leading ../", () => {
+    expect(resolveDeclaredPath("../../assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("strips leading ./", () => {
+    expect(resolveDeclaredPath("./assets/imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("unambiguous basename fallback", () => {
+    // User declared theme: imago.scss with no directory; we find it anyway.
+    expect(resolveDeclaredPath("imago.scss", tree)).toBe("assets/imago.scss");
+  });
+
+  test("ambiguous basename returns null (caller decides)", () => {
+    expect(resolveDeclaredPath("dark.scss", [...tree, "alt/dark.scss"])).toBeNull();
+  });
+
+  test("unknown file returns null", () => {
+    expect(resolveDeclaredPath("nope.scss", tree)).toBeNull();
+  });
+
+  test("exact match preferred over basename", () => {
+    // `themes/dark.scss` and `assets/dark.scss` both exist; declared path
+    // matches one of them — use that, don't trigger the ambiguous-basename
+    // fallback.
+    const t = [...tree, "assets/dark.scss"];
+    expect(resolveDeclaredPath("themes/dark.scss", t)).toBe("themes/dark.scss");
+  });
 });
 
 describe("synthetic features the workshop deck doesn't exercise", () => {

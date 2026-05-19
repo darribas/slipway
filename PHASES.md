@@ -235,9 +235,10 @@ UX notes worth flagging:
 Reported during testing, queued for individual increments. Tick off as they ship.
 
 - ✓ **[5a]** Editor unreadable in light mode — see increment 5a below.
-- [ ] **[5b]** Editor only opens `.qmd` files. The user can't edit `.scss` / `.bib` / `.csl` / `.yaml` etc., which makes the app much less useful as a project editor. Needs decoupling "active editor file" from "active deck" (the latter is what the Render button targets).
+- ✓ **[5b]** Editor only opens `.qmd` files — see increment 5b/d below.
 - [ ] **[5c]** Zip import appears to drop non-`.qmd` files. User reports only the `.qmd` survives the import. Possibilities: real bug in `importZip` or its filtering, an auto-collapsed folder hiding what's actually there, or a missing tree refresh. Needs investigation with a real Quarto project zip + better post-import diagnostics ("Imported N files across M folders").
-- [ ] **[5d]** Renderer doesn't pick up pre-compiled `.css` themes. `project.ts` only looks for `.scss`; users with a `.css` theme get an unstyled deck. Trivial fix — extend the stylesheet picker to accept either, treat `.css` as already-compiled and skip the Sass step.
+- ✓ **[5d]** Renderer wasn't picking up the theme at all (not just the `.css` case). Real root cause was that pandoc emitted a `<link>` referencing the WASI VFS path which the iframe couldn't resolve — see increment 5b/d below.
+- ✓ **[5e]** Renderer ignored the YAML's `theme:` declaration and just globbed for the first `.scss`. The seed deck declared `theme: ../assets/imago.scss` but the renderer never read that — it accidentally worked because there was only one `.scss` in the project. Fragile if multiple stylesheets exist or one gets renamed. Fixed by `resolveDeclaredPath` (see increment 5e below).
 
 ### Increment 4.1: File-tree actions always visible
 
@@ -257,6 +258,57 @@ Fix:
 - Live theme switching deferred — snapshot at load is enough for now; a reload picks up an OS appearance flip. Wire to a live `matchMedia` listener if it becomes an annoyance.
 
 Verified by light and dark screenshots: both modes legible, syntax highlighting visible, file tree / toolbar / preview palettes coherent. Smoke test still 10/10.
+
+### Increment 5b/d: Edit any text file + theme actually applies
+
+Two user-testing reports landed in the same area of the codebase, bundled into one increment.
+
+**5d — theme files weren't being picked up at all.** Bigger bug than the report suggested. We compile the project's SCSS to CSS and put it in pandoc's WASI VFS at path `theme.css`, and tell pandoc `css: ["theme.css"]`. Pandoc dutifully emits `<link rel="stylesheet" href="theme.css">` in the output — but the iframe receiving that HTML via `srcdoc` has no way to resolve `theme.css` (the VFS is invisible to it). So every render since Phase 1 has been silently missing its theme; the smoke test was passing on "link tag exists" without checking the CSS ever reached the browser.
+
+Same fix shape as the reveal.js inlining (increment 3): post-process pandoc's output to swap the `<link>` for an inline `<style data-from="theme.css">` block carrying the compiled CSS. New `inlineThemeCss(html, css)` in `core/inline-assets.ts`; `render.ts` calls it right after `inlineRevealAssets`.
+
+Stylesheet picker in `project.ts` now also accepts `.css` natively — prefers `.scss` when both exist (so source edits keep applying), falls back to `.css` for projects that ship pre-compiled themes. New `stylesheetIsPrecompiled` flag on `RenderInputs` tells the renderer whether to run Sass or pass through.
+
+Smoke test gets two new assertions: rendered HTML contains the imago navy colour (`#24226f`) and the Figtree font reference, plus a synthetic deck with a `.css` stylesheet round-trips through unchanged. 12 tests now.
+
+**5b — edit any text file.** The file tree's `onOpen` previously bailed for non-`.qmd` paths. Two changes:
+
+- `project.ts` separates `activeEditor` (whatever's in the editor — `.qmd`, `.scss`, `.bib`, `.yaml`, etc.) from `activeQmd` (what Render targets, last-touched `.qmd`). Autosave and `Cmd+S` write to `activeEditor`; the Render button still targets `activeQmd`, which persists when the user navigates to a non-`.qmd` to tweak the theme.
+- New `isTextFile(path)` helper with an extension allowlist (qmd, md, scss, css, bib, csl, yaml, json, txt, svg, html, lua, tex, js, ts). Binary opens are still refused — no point shoving a PNG's bytes into a text editor.
+- `main.ts` callbacks reworked: rename / delete / create / fileTree highlight all key off `activeEditor`. Delete-of-active-qmd falls back to the next available `.qmd`; delete-of-non-qmd-editor-file falls back to whichever `.qmd` is currently the active deck.
+
+Old `readQmd` / `saveQmd` helpers in `project.ts` are now thin wrappers superseded by `readFile` / `saveFile`.
+
+Smoke test still 12/12. Browser e2e confirms: clicking the imago `.scss` in the tree opens it in the editor; the toolbar's deck status survives the navigation; hitting Render still renders the last-touched `.qmd`.
+
+### Increment 6: Vim bindings
+
+Per the spec's editor section: vim bindings always-on, via `@replit/codemirror-vim`.
+
+- The package's `vim()` extension is prepended to CodeMirror's extension array so its keymap binds before the standard one. Single-key normal-mode bindings (`hjkl`, `i`, `:`, `/`, …) win; modifier shortcuts (`Cmd+S`, `Cmd+R`) keep working because vim doesn't intercept those.
+- Ex commands wired to our existing save handler: `:w`, `:write`, `:up`, `:update`, `:wq`, `:x` all call `opts.onSave`. We have no buffer-close concept, so the `:q`-variants are effectively save aliases — useful for keyboard users who type `:wq` reflexively.
+- Status line is built into the extension; it appears at the bottom of the editor only when you type `:` or `/`, so it stays out of the way otherwise.
+- Snapshot-at-construction approach for themes / vim — a reload picks up changes; no live runtime toggle needed.
+
+Smoke test: no new assertions (vim is editor-only, doesn't touch the render pipeline). 23/23 still passing. Build + light/dark e2e screenshots show the vim normal-mode block cursor present and the editor chrome unchanged.
+
+### Increment 5e: Honour the YAML's theme: / bibliography: declarations
+
+User caught a fragility: the seed `.qmd` declares `theme: ../assets/imago.scss` but the actual file lives at `assets/imago.scss` (the seed flattened the workshop's `slides/` directory). The renderer was accidentally working because `buildRenderInputs` ignored the YAML declarations entirely and globbed for the first `.scss` it found — fine with one stylesheet, surprising as soon as a project has two.
+
+New modules:
+
+- `core/frontmatter.ts` — `extractDeclarations(qmd)` parses YAML frontmatter and returns `{ theme, bib }`, handling both top-level `theme:` / `bibliography:` and the nested `format: revealjs: theme:` form.
+- `core/path-resolve.ts` — `resolveDeclaredPath(declared, allPaths)` tries (a) exact match, (b) match after stripping leading `./` and `../` segments, (c) unambiguous basename match anywhere in the tree. Returns null when ambiguous so the caller can fall back to a glob.
+
+`buildRenderInputs` now extracts the declarations, resolves them, and only falls back to "first `.scss` / `.css` / `.bib`" when nothing's declared *or* the declared path can't be resolved.
+
+Smoke test added 11 new unit-level assertions:
+
+- 4 for `extractDeclarations`: top-level, nested-format, missing frontmatter, malformed YAML.
+- 7 for `resolveDeclaredPath`: exact match, single/multiple `../` stripping, `./` stripping, unambiguous basename, ambiguous basename → null, unknown → null, exact match preferred over basename when ambiguous would otherwise apply.
+
+Total now 23/23 passing. The existing imago workshop end-to-end render still hits the same `assets/imago.scss` it always did, but now via the declaration-driven path rather than by accident.
 
 -----
 

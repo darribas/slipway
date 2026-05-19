@@ -14,10 +14,13 @@ import { renderDeck } from "./core/render";
 import { seedIfEmpty } from "./storage/seed";
 import {
   buildRenderInputs,
+  getActiveEditor,
   getActiveQmd,
+  isTextFile,
   listQmds,
-  readQmd,
-  saveQmd,
+  readFile,
+  saveFile,
+  setActiveEditor,
   setActiveQmd,
 } from "./storage/project";
 import { exportZip, importZip } from "./storage/zip";
@@ -58,6 +61,7 @@ async function main(): Promise<void> {
     layout.setStatus("No .qmd files in project — import a zip or create one", "warn");
   } else {
     setActiveQmd(initialQmd);
+    setActiveEditor(initialQmd);
   }
 
   // Build the editor, preview, and file-tree into their own DOM containers,
@@ -76,7 +80,7 @@ async function main(): Promise<void> {
 
   const editor = createEditor({
     parent: editorContainer,
-    initialDoc: initialQmd ? await readQmd(initialQmd) : "",
+    initialDoc: initialQmd ? await readFile(initialQmd) : "",
     onChange: () => {
       layout.setStale(true);
       scheduleAutosave(editor);
@@ -125,10 +129,11 @@ async function main(): Promise<void> {
       try {
         await flushAutosave(editor);
         await rename(oldPath, newPath);
-        if (getActiveQmd() === oldPath) {
-          setActiveQmd(newPath);
+        if (getActiveEditor() === oldPath) {
+          setActiveEditor(newPath);
           editorPanel.api.setTitle(newPath);
         }
+        if (getActiveQmd() === oldPath) setActiveQmd(newPath);
         await refreshTree();
         layout.setStatus(`Renamed → ${newPath}`, "ok");
       } catch (e) {
@@ -138,12 +143,20 @@ async function main(): Promise<void> {
     onDelete: async (path) => {
       try {
         await remove(path);
-        if (getActiveQmd() === path) {
-          const remaining = (await listQmds()).filter((p) => p !== path);
-          if (remaining[0]) {
-            await openFile(remaining[0]);
+        const editorWasActive = getActiveEditor() === path;
+        const qmdWasActive = getActiveQmd() === path;
+        if (qmdWasActive) {
+          const remainingQmds = (await listQmds()).filter((p) => p !== path);
+          setActiveQmd(remainingQmds[0] ?? null);
+        }
+        if (editorWasActive) {
+          const fallback = getActiveQmd();
+          if (fallback) {
+            editor.setDoc(await readFile(fallback));
+            setActiveEditor(fallback);
+            editorPanel.api.setTitle(fallback);
           } else {
-            setActiveQmd(null);
+            setActiveEditor(null);
             editor.setDoc("");
             editorPanel.api.setTitle("(no file)");
           }
@@ -163,7 +176,9 @@ async function main(): Promise<void> {
         }
         await writeText(path, "");
         await refreshTree();
-        if (path.toLowerCase().endsWith(".qmd")) await openFile(path);
+        // Open the new file in the editor if it looks like text the user
+        // probably wants to start typing into. Stays unopened for binary.
+        if (isTextFile(path)) await openFile(path);
         layout.setStatus(`Created ${path}`, "ok");
       } catch (e) {
         layout.setStatus(`Create failed: ${msgOf(e)}`, "error");
@@ -185,16 +200,22 @@ async function main(): Promise<void> {
   });
 
   async function openFile(path: string): Promise<void> {
-    if (!path.toLowerCase().endsWith(".qmd")) {
-      layout.setStatus(`${path} isn't a .qmd — open skipped`, "warn");
+    if (!isTextFile(path)) {
+      layout.setStatus(`${path} isn't a text file — open skipped`, "warn");
       return;
     }
     await flushAutosave(editor);
-    setActiveQmd(path);
-    editor.setDoc(await readQmd(path));
+    editor.setDoc(await readFile(path));
+    setActiveEditor(path);
+    // Only .qmd files become the deck target. Editing other files (theme,
+    // bib, etc.) leaves the previous active deck in place so Render still
+    // works as expected.
+    if (path.toLowerCase().endsWith(".qmd")) {
+      setActiveQmd(path);
+      layout.setStale(true);
+    }
     editorPanel.api.setTitle(path);
     fileTree.setActive(path);
-    layout.setStale(true);
     layout.setStatus(`Opened ${path}`);
   }
 
@@ -208,7 +229,7 @@ async function main(): Promise<void> {
         return !segments[segments.length - 1].startsWith(".");
       }),
     );
-    fileTree.setActive(getActiveQmd());
+    fileTree.setActive(getActiveEditor());
   }
 
   await refreshTree();
@@ -333,9 +354,9 @@ async function manualSave(editor: EditorHandle, layout: ReturnType<typeof mountL
 }
 
 async function saveActive(editor: EditorHandle): Promise<void> {
-  const path = getActiveQmd();
+  const path = getActiveEditor();
   if (!path) return;
-  await saveQmd(path, editor.getDoc());
+  await saveFile(path, editor.getDoc());
 }
 
 // ---- Helpers --------------------------------------------------------------

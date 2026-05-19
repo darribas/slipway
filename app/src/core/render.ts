@@ -1,6 +1,6 @@
 import { compileScss } from "./sass";
 import { preprocessDeck } from "./preprocess";
-import { inlineRevealAssets } from "./inline-assets";
+import { inlineRevealAssets, inlineThemeCss } from "./inline-assets";
 import type { PandocInstance, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
@@ -34,8 +34,14 @@ export async function renderDeck(
 ): Promise<RenderResult> {
   const t0 = performance.now();
 
-  // Compile SCSS once per render. Phase 2 can memoise on hash.
-  const css = compileScss(inputs.scss);
+  // The stylesheet may be either Sass source (compile via Dart Sass) or
+  // already-compiled CSS (use as-is). Empty string means no theme in the
+  // project; skip the entire CSS plumbing in that case.
+  const css = inputs.stylesheet
+    ? inputs.stylesheetIsPrecompiled
+      ? inputs.stylesheet
+      : compileScss(inputs.stylesheet)
+    : "";
 
   // Build the asset-URI map for image inlining (only image-typed assets).
   const assetUris = new Map<string, string>();
@@ -75,10 +81,13 @@ export async function renderDeck(
     else warnings.push(JSON.stringify(w));
   }
 
-  // Inline reveal.js core + plugins so the rendered deck has no external
-  // dependencies. App becomes fully offline-capable (the Phase 3 goal) and
-  // the deck stops being at the mercy of unpkg resolving `^5` at fetch time.
-  const html = inlineRevealAssets(result.stdout);
+  // Two post-pandoc inlining passes:
+  //   1. Reveal.js core + plugins (so the iframe has no external CDN deps)
+  //   2. Our compiled theme.css (pandoc only emits a <link> pointing at the
+  //      VFS path, which the iframe can't resolve — see inlineThemeCss for
+  //      the full story).
+  let html = inlineRevealAssets(result.stdout);
+  html = inlineThemeCss(html, css);
 
   return {
     html,
