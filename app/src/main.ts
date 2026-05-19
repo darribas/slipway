@@ -93,17 +93,11 @@ async function main(): Promise<void> {
       return renderer;
     },
   });
-  // Default layout: editor on the left, preview top-right, files bottom-right.
-  // Preview is added first so it claims the whole space, then files docks
-  // below it, then the first editor opens to the left of preview.
+  // Default layout: editor left, preview top-right, files bottom-right.
+  // Preview claims the whole pane first. Files is added AFTER the first editor
+  // splits the layout into two columns, so it docks below just the right column.
   dock.addPanel({ id: "preview", component: "preview", title: "Preview" });
-  const filesPanel = dock.addPanel({
-    id: "files",
-    component: "files",
-    title: "Files",
-    position: { referencePanel: "preview", direction: "below" },
-  });
-  filesPanel.api.setSize({ height: 240 });
+  let filesAdded = false;
   const resizeDock = () => dock.layout(layout.paneHost.clientWidth, layout.paneHost.clientHeight);
   resizeDock();
   window.addEventListener("resize", resizeDock);
@@ -260,6 +254,18 @@ async function main(): Promise<void> {
       title: path,
       position,
     });
+    // First editor split: now that the editor occupies the left and preview
+    // the top-right, add files below preview so it only covers the right column.
+    if (!anyExisting && !filesAdded) {
+      filesAdded = true;
+      const fp = dock.addPanel({
+        id: "files",
+        component: "files",
+        title: "Files",
+        position: { referencePanel: "preview", direction: "below" },
+      });
+      fp.api.setSize({ height: 240 });
+    }
     // Active-change + removal are wired at dock-level above; nothing to hook
     // per-panel here.
     opens.set(path, open);
