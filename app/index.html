@@ -7,11 +7,17 @@
   <meta name="description" content="Offline-capable Quarto reveal.js slide authoring for iPad and desktop.">
   <!-- iOS PWA chrome: hides Safari URL bar when installed via Add-to-Home-Screen
        and lets viewport-fit=cover + env(safe-area-inset-*) lay out around the
-       status bar / home indicator correctly. -->
+       status bar / home indicator correctly. theme-color matches the icon's
+       sky-blue background for visual continuity. -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Slipway">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2324226F'/%3E%3Cpath d='M3 4h10v2H3zM3 7h10v2H3zM3 10h7v2H3z' fill='%23FF8F42'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#B8D6EE">
+  <!-- Browser favicons get the rounded SVG; iOS apple-touch-icon and Android
+       PWA icons get the square PNGs (the OS adds its own rounding/masking). -->
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icon-180.png">
+  <link rel="manifest" href="./manifest.webmanifest">
 </head>
 <body>
   <div id="app"></div>
