@@ -93,14 +93,17 @@ async function main(): Promise<void> {
       return renderer;
     },
   });
-  const filesPanel = dock.addPanel({ id: "files", component: "files", title: "Files" });
-  dock.addPanel({
-    id: "preview",
-    component: "preview",
-    title: "Preview",
-    position: { referencePanel: "files", direction: "right" },
+  // Default layout: editor on the left, preview top-right, files bottom-right.
+  // Preview is added first so it claims the whole space, then files docks
+  // below it, then the first editor opens to the left of preview.
+  dock.addPanel({ id: "preview", component: "preview", title: "Preview" });
+  const filesPanel = dock.addPanel({
+    id: "files",
+    component: "files",
+    title: "Files",
+    position: { referencePanel: "preview", direction: "below" },
   });
-  filesPanel.api.setSize({ width: 220 });
+  filesPanel.api.setSize({ height: 240 });
   const resizeDock = () => dock.layout(layout.paneHost.clientWidth, layout.paneHost.clientHeight);
   resizeDock();
   window.addEventListener("resize", resizeDock);
@@ -244,12 +247,13 @@ async function main(): Promise<void> {
       onRender: () => void runRender(),
     });
 
-    // First editor sits between Files and Preview; subsequent ones stack
-    // as tabs in the first editor's group, wherever the user has dragged it.
+    // First editor opens to the left of Preview (so the right-hand column
+    // ends up Preview on top, Files on bottom); subsequent ones stack as
+    // tabs in the first editor's group, wherever the user has dragged it.
     const anyExisting = opens.values().next().value as OpenEditor | undefined;
     const position = anyExisting
       ? { referenceGroup: anyExisting.panel.group }
-      : { referencePanel: "files", direction: "right" as const };
+      : { referencePanel: "preview", direction: "left" as const };
     open.panel = dock.addPanel({
       id: componentId,
       component: componentId,
