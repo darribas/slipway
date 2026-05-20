@@ -30,6 +30,7 @@ import {
   probeCapabilities,
   remove,
   rename,
+  writeBytes,
   writeText,
 } from "./storage/storage";
 import { readFileBytes, saveImageToAssets } from "./core/image-insert";
@@ -200,6 +201,27 @@ async function main(): Promise<void> {
         layout.setStatus(`Created folder ${joinPath(parentDir, name)}`, "ok");
       } catch (e) {
         layout.setStatus(`Create folder failed: ${msgOf(e)}`, "error");
+      }
+    },
+    onDropFiles: async (files, targetDir) => {
+      layout.setStatus(`Saving ${files.length} file${files.length === 1 ? "" : "s"}…`);
+      const saved: string[] = [];
+      const errors: string[] = [];
+      for (const file of files) {
+        const path = joinPath(targetDir, file.name);
+        try {
+          const bytes = await readFileBytes(file);
+          await writeBytes(path, bytes);
+          saved.push(path);
+        } catch (e) {
+          errors.push(`${file.name}: ${msgOf(e)}`);
+        }
+      }
+      await refreshTree();
+      if (errors.length) {
+        layout.setStatus(`Saved ${saved.length}, failed: ${errors.join("; ")}`, "error");
+      } else {
+        layout.setStatus(`Added ${saved.join(", ")}`, "ok");
       }
     },
   });

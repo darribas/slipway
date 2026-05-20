@@ -236,6 +236,8 @@ kbd {
   white-space: nowrap;
 }
 .slipway-file-tree .ft-row:hover { background: var(--bg-panel); }
+.slipway-file-tree .ft-row.ft-drag-over,
+.slipway-file-tree .ft-body.ft-drag-over { background: rgba(36, 34, 111, 0.10); outline: 2px dashed var(--accent); outline-offset: -2px; }
 .slipway-file-tree .ft-row.active {
   background: rgba(36, 34, 111, 0.12);
   color: var(--accent);
