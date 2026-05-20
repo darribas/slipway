@@ -49,12 +49,18 @@ function sharedTopLevelDir(names: string[]): string {
 
 /**
  * Bundle the current OPFS into a zip blob suitable for download.
+ * If `renderedHtml` is supplied it is included as `rendered/index.html` — a
+ * fully self-contained file (all assets inlined) that opens directly in any
+ * browser without a server.
  */
-export async function exportZip(): Promise<Blob> {
+export async function exportZip(renderedHtml?: string | null): Promise<Blob> {
   const paths = await listFiles();
   const entries: Record<string, Uint8Array> = {};
   for (const path of paths) {
     entries[path] = await readBytes(path);
+  }
+  if (renderedHtml) {
+    entries["rendered/index.html"] = new TextEncoder().encode(renderedHtml);
   }
   const zipped = zipSync(entries, { level: 6 });
   // ArrayBuffer copy to satisfy strict Blob types (zipped's underlying buffer

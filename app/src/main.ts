@@ -399,9 +399,10 @@ async function main(): Promise<void> {
     await flushAllAutosaves();
     layout.setStatus("Exporting…");
     try {
-      const blob = await exportZip();
+      const blob = await exportZip(lastRenderedHtml);
       downloadBlob(blob, suggestedExportName());
-      layout.setStatus(`Exported (${(blob.size / 1024).toFixed(0)} KB)`, "ok");
+      const note = lastRenderedHtml ? " + rendered/index.html" : "";
+      layout.setStatus(`Exported (${(blob.size / 1024).toFixed(0)} KB${note})`, "ok");
     } catch (e) {
       layout.setStatus(`Export failed: ${msgOf(e)}`, "error");
     }
