@@ -32,6 +32,7 @@ import {
   rename,
   writeText,
 } from "./storage/storage";
+import { readFileBytes, saveImageToAssets } from "./core/image-insert";
 
 const AUTOSAVE_MS = 2_000;
 
@@ -239,6 +240,7 @@ async function main(): Promise<void> {
       },
       onSave: () => void manualSave(open),
       onRender: () => void runRender(),
+      onImageFile: (file) => void handleImageFile(file, open),
     });
 
     // First editor opens to the left of Preview (so the right-hand column
@@ -326,6 +328,32 @@ async function main(): Promise<void> {
     } finally {
       layout.importInput.value = "";
     }
+  });
+
+  // ---- Image insertion (file picker, paste, drag-drop) --------------------
+
+  async function handleImageFile(file: File | Blob, targetOpen?: OpenEditor): Promise<void> {
+    const active = targetOpen ?? [...opens.values()].find((o) => o.path === getActiveEditor());
+    try {
+      layout.setStatus("Saving image…");
+      const bytes = await readFileBytes(file);
+      const path = await saveImageToAssets(bytes, file.type || "image/png");
+      await refreshTree();
+      if (active) {
+        active.handle.insertImageMarkdown(path);
+        if (active.path.toLowerCase().endsWith(".qmd")) layout.setStale(true);
+      }
+      layout.setStatus(`Inserted ${path}`, "ok");
+    } catch (e) {
+      layout.setStatus(`Image insert failed: ${msgOf(e)}`, "error");
+    } finally {
+      layout.imageInput.value = "";
+    }
+  }
+
+  layout.imageInput.addEventListener("change", () => {
+    const file = layout.imageInput.files?.[0];
+    if (file) void handleImageFile(file);
   });
 
   layout.exportBtn.addEventListener("click", async () => {

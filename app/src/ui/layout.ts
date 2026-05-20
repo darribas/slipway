@@ -11,6 +11,7 @@ export interface LayoutHandle {
   paneHost: HTMLElement; // root for the DockviewComponent
   renderBtn: HTMLButtonElement;
   importInput: HTMLInputElement;
+  imageInput: HTMLInputElement;
   exportBtn: HTMLButtonElement;
   presentBtn: HTMLButtonElement;
   status: HTMLSpanElement;
@@ -45,6 +46,15 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   importLabel.appendChild(importInput);
   toolbar.appendChild(importLabel);
 
+  const imageLabel = el("label", "file-input") as HTMLLabelElement;
+  imageLabel.textContent = "Insert image…";
+  imageLabel.title = "Pick an image to insert at the cursor (or paste / drag-drop)";
+  const imageInput = el("input") as HTMLInputElement;
+  imageInput.type = "file";
+  imageInput.accept = "image/*";
+  imageLabel.appendChild(imageInput);
+  toolbar.appendChild(imageLabel);
+
   const exportBtn = el("button") as HTMLButtonElement;
   exportBtn.textContent = "Export zip";
   exportBtn.title = "Download the project as a .zip";
@@ -69,6 +79,7 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
     paneHost,
     renderBtn,
     importInput,
+    imageInput,
     exportBtn,
     presentBtn,
     status,
