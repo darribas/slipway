@@ -53,7 +53,20 @@ interface OpenEditor {
 }
 
 async function main(): Promise<void> {
-  const layout = mountLayout(document.getElementById("app")!);
+  const appEl = document.getElementById("app")!;
+  const layout = mountLayout(appEl);
+
+  // iOS Safari: when the on-screen keyboard appears (e.g. vim command line),
+  // the visual viewport shrinks but the layout viewport does not always follow.
+  // Pinning #app's height to visualViewport.height is more reliable than dvh
+  // alone and prevents the toolbar from scrolling off-screen.
+  if (window.visualViewport) {
+    const lockHeight = () => {
+      appEl.style.height = `${window.visualViewport!.height}px`;
+    };
+    window.visualViewport.addEventListener("resize", lockHeight);
+    lockHeight();
+  }
 
   if (navigator.storage?.persist) void navigator.storage.persist();
 

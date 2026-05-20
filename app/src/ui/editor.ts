@@ -1,5 +1,5 @@
 import { EditorState, type Extension } from "@codemirror/state";
-import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap } from "@codemirror/view";
+import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, drawSelection } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { yaml as yamlLang } from "@codemirror/lang-yaml";
 import { css as cssLang } from "@codemirror/lang-css";
@@ -86,6 +86,7 @@ export function createEditor(opts: EditorOptions): EditorHandle {
     // intercepts non-modifier keystrokes.
     vim(),
     history(),
+    drawSelection(),
     lineNumbers(),
     highlightActiveLine(),
     highlightActiveLineGutter(),
