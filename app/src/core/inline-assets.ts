@@ -104,6 +104,50 @@ export function inlineThemeCss(html: string, css: string): string {
 }
 
 /**
+ * Inject a tiny polyfill that makes localStorage, sessionStorage, and
+ * history.pushState/replaceState safe inside a sandboxed iframe.
+ *
+ * The app preview iframe uses `sandbox="allow-scripts allow-popups"` without
+ * `allow-same-origin`, which gives it a null origin. Accessing localStorage or
+ * sessionStorage (and calling history.replaceState) from a null origin throws a
+ * SecurityError. reveal.js's notes plugin reads localStorage on every keydown
+ * event; if that throws uncaught, the entire Reveal keyboard handler dies —
+ * which is why slide navigation stops after fragments run out on a slide.
+ *
+ * The polyfill runs synchronously before any other script so all subsequent
+ * code (reveal.js, plugins) sees safe storage objects.
+ */
+export function injectSandboxCompat(html: string): string {
+  const script = `<script data-from="slipway:sandbox-compat">
+(function(){
+  function memStorage(){
+    var s={};
+    return{
+      getItem:function(k){return Object.prototype.hasOwnProperty.call(s,k)?s[k]:null},
+      setItem:function(k,v){s[k]=String(v)},
+      removeItem:function(k){delete s[k]},
+      clear:function(){s={}},
+      key:function(i){return Object.keys(s)[i]??null},
+      get length(){return Object.keys(s).length}
+    };
+  }
+  ['localStorage','sessionStorage'].forEach(function(name){
+    try{window[name].setItem('__t','1');window[name].removeItem('__t');}
+    catch(e){
+      try{Object.defineProperty(window,name,{configurable:true,value:memStorage()});}catch(e2){}
+    }
+  });
+  ['replaceState','pushState'].forEach(function(method){
+    var orig=history[method].bind(history);
+    history[method]=function(){try{orig.apply(history,arguments);}catch(e){}};
+  });
+})();
+<\/script>`;
+  // Insert right after the opening <body> tag so it executes before reveal.js.
+  return html.replace(/<body>/, "<body>\n" + script);
+}
+
+/**
  * Replace every <link>/<script> in `html` that points at one of our known
  * reveal.js CDN URLs with an inline <style>/<script> block. Returns the
  * rewritten HTML; leaves unrecognised external references alone.

@@ -134,6 +134,20 @@ describe("slipway-demo deck", () => {
     expect(lastInlinedRevealAsset).toBeGreaterThan(0);
     expect(overrideIdx).toBeGreaterThan(lastInlinedRevealAsset);
   }, 30_000);
+
+  test("sandbox-compat polyfill is injected before reveal.js", async () => {
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    const compatIdx  = html.indexOf('data-from="slipway:sandbox-compat"');
+    const revealIdx  = html.indexOf('data-from="https://unpkg.com/reveal.js@^5/dist/reveal.js"');
+    expect(compatIdx).toBeGreaterThan(0);
+    expect(revealIdx).toBeGreaterThan(0);
+    // polyfill must appear before reveal.js so storage shims are in place first
+    expect(compatIdx).toBeLessThan(revealIdx);
+    // localStorage shim must be present
+    expect(html).toContain("localStorage");
+    // history shim must be present
+    expect(html).toContain("replaceState");
+  }, 30_000);
 });
 
 // ---------------------------------------------------------------------------
