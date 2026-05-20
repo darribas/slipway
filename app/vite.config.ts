@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 // Bridge pandoc.wasm out of the pandoc-wasm package without going through its
 // strict `exports` field. Dev mode serves the wasm via middleware at a stable
@@ -52,7 +53,25 @@ function pandocWasmPlugin(): Plugin {
 export default defineConfig({
   // Relative base so the built app works at any path (GitHub Pages, /slipway/, etc).
   base: "./",
-  plugins: [pandocWasmPlugin()],
+  plugins: [
+    pandocWasmPlugin(),
+    VitePWA({
+      // Service worker is registered by the virtual module imported in main.ts.
+      registerType: "autoUpdate",
+      // Keep the hand-crafted manifest.webmanifest in public/ as-is.
+      manifest: false,
+      workbox: {
+        // Include every file type the build emits.
+        globPatterns: ["**/*.{js,css,html,wasm,png,svg,ico,webmanifest}"],
+        // pandoc.wasm is ~56 MB; Workbox's default 2 MB cap would silently
+        // exclude it from the precache, leaving rendering broken offline.
+        maximumFileSizeToCacheInBytes: 100 * 1024 * 1024,
+        // Cache-first for everything in the precache list (app shell + wasm).
+        // Runtime requests (none expected in normal operation) fall through.
+        navigateFallback: "index.html",
+      },
+    }),
+  ],
   build: {
     target: "esnext",
     sourcemap: true,
