@@ -18,6 +18,11 @@ export interface LayoutHandle {
   setStatus: (text: string, kind?: "info" | "warn" | "error" | "ok") => void;
   /** Update the persistent offline-readiness indicator in the toolbar. */
   setOfflineReady: (ready: boolean) => void;
+  /**
+   * Show the update-ready button. `onAccept` is called when the user clicks
+   * it; the caller should trigger a SW skip-waiting + page reload there.
+   */
+  showUpdateReady: (onAccept: () => void) => void;
 }
 
 export function mountLayout(root: HTMLElement): LayoutHandle {
@@ -53,6 +58,12 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   toolbar.appendChild(exportBtn);
 
   toolbar.appendChild(el("span", "spacer"));
+
+  const updateBtn = el("button", "update-ready") as HTMLButtonElement;
+  updateBtn.textContent = "↻ Update ready";
+  updateBtn.title = "A new version is available — click to reload";
+  updateBtn.hidden = true;
+  toolbar.appendChild(updateBtn);
 
   const offlineIndicator = el("span", "offline-indicator") as HTMLSpanElement;
   offlineIndicator.textContent = "✈";
@@ -92,6 +103,14 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
       offlineIndicator.title = ready
         ? "App is cached and works offline"
         : "Offline mode not yet ready — stay connected while assets cache";
+    },
+    showUpdateReady: (onAccept) => {
+      updateBtn.hidden = false;
+      updateBtn.onclick = () => {
+        updateBtn.disabled = true;
+        updateBtn.textContent = "Reloading…";
+        onAccept();
+      };
     },
   };
 }
