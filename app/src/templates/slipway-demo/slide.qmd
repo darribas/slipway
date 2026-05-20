@@ -234,6 +234,23 @@ Any CSS colour works. Images too:
 ## Darker slide {background-color="#1c2428"}
 ```
 
+## Presentation UI
+
+Toggle chrome elements in the YAML frontmatter:
+
+```yaml
+format:
+  revealjs:
+    controls: false      # hide navigation arrows (default: true)
+    progress: false      # hide progress bar     (default: true)
+    slide-number: true   # show slide counter    (default: false)
+```
+
+**Hamburger menu** — not yet built in; it's on the roadmap.
+
+**Keyboard shortcuts** (always available):
+**F** fullscreen · **Esc** overview · **S** speaker view · **?** help
+
 ## {{< include >}} shortcode
 
 {{< include _snippet.md >}}
