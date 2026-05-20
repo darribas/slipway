@@ -91,13 +91,21 @@ describe("slipway-demo deck", () => {
     expect(html).toContain("--probe-marker: rgb(123,45,67)");
   }, 30_000);
 
-  test("inlines reveal.js — no external <link>/<script> refs left in the deck", async () => {
+  test("inlines reveal.js and KaTeX — no external CDN refs left in the deck", async () => {
     const { html } = await renderDeck(pandoc, await loadDemoInputs());
     const externalLinks   = html.match(/<link\b[^>]*href=["']https?:\/\/[^"']+["'][^>]*>/g)   ?? [];
     const externalScripts = html.match(/<script\b[^>]*src=["']https?:\/\/[^"']+["'][^>]*>/g)  ?? [];
-    const remaining = [...externalLinks, ...externalScripts].filter((t) => !/katex/i.test(t));
-    expect(remaining).toEqual([]);
+    expect([...externalLinks, ...externalScripts]).toEqual([]);
     expect(html).toContain('data-from="https://unpkg.com/reveal.js@^5/dist/reveal.js"');
+    expect(html).toContain('data-from="slipway:katex-js"');
+    expect(html).toContain('data-from="slipway:katex-css"');
+  }, 30_000);
+
+  test("KaTeX fonts are inlined as data URIs — no relative font URLs remain", async () => {
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    // All font-face src entries must be data URIs; no url(fonts/...) should survive.
+    expect(html).not.toMatch(/url\(fonts\/KaTeX_/);
+    expect(html).toMatch(/url\(data:font\/woff2;base64,/);
   }, 30_000);
 
   test("renders columns, incremental lists, and citations", async () => {

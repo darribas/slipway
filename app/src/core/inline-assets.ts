@@ -13,6 +13,7 @@
 // so inlining it correctly means data-URI'ing the fonts too. Out of scope
 // here; the workshop deck has no math.
 
+import { js as katexJs, css as katexCss } from "virtual:katex-inlined";
 import resetCss from "reveal.js/dist/reset.css?raw";
 import revealCss from "reveal.js/dist/reveal.css?raw";
 import revealJs from "reveal.js/dist/reveal.js?raw";
@@ -101,6 +102,30 @@ export function inlineThemeCss(html: string, css: string): string {
   return html.replace(re, () =>
     `<style data-from="theme.css">\n${css}\n</style>`,
   );
+}
+
+/**
+ * Replace the two CDN KaTeX tags pandoc emits with fully self-contained
+ * inline blocks. Pandoc uses `@latest` which resolves unpredictably and
+ * fails entirely when offline; this pins to the bundled version and
+ * eliminates the network dependency.
+ *
+ * The CSS variant produced by katexInlinePlugin already has all fonts
+ * embedded as data URIs, so the deck renders math correctly in the
+ * sandboxed srcdoc iframe (null origin, no relative URL resolution).
+ */
+export function inlineKatexAssets(html: string): string {
+  // Replace <script src="https://cdn.jsdelivr.net/npm/katex@.../katex.min.js">
+  html = html.replace(
+    /<script\b[^>]*src=["']https:\/\/cdn\.jsdelivr\.net\/npm\/katex[^"']*\/katex\.min\.js["'][^>]*><\/script>/g,
+    () => `<script data-from="slipway:katex-js">\n${katexJs}\n</script>`,
+  );
+  // Replace <link href="https://cdn.jsdelivr.net/npm/katex@.../katex.min.css" ...>
+  html = html.replace(
+    /<link\b[^>]*href=["']https:\/\/cdn\.jsdelivr\.net\/npm\/katex[^"']*\/katex\.min\.css["'][^>]*\/?>/g,
+    () => `<style data-from="slipway:katex-css">\n${katexCss}\n</style>`,
+  );
+  return html;
 }
 
 /**
