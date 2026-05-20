@@ -115,7 +115,10 @@ export default defineConfig({
     katexInlinePlugin(),
     VitePWA({
       // Service worker is registered by the virtual module imported in main.ts.
-      registerType: "autoUpdate",
+      // "prompt" fires onNeedRefresh when a new SW is waiting, giving the app
+      // a chance to show the update button before reloading. "autoUpdate" would
+      // silently swap the SW with no user signal.
+      registerType: "prompt",
       // Keep the hand-crafted manifest.webmanifest in public/ as-is.
       manifest: false,
       workbox: {
