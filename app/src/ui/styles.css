@@ -219,7 +219,8 @@ kbd {
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
-.slipway-file-tree .ft-toolbar button {
+.slipway-file-tree .ft-toolbar button,
+.slipway-file-tree .ft-toolbar .ft-insert-image {
   font: inherit;
   font-size: 12px;
   padding: 3px 8px;
@@ -228,8 +229,11 @@ kbd {
   border: 1px solid var(--border-strong);
   border-radius: 3px;
   cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
 }
-.slipway-file-tree .ft-toolbar button:hover { background: var(--bg-panel); }
+.slipway-file-tree .ft-toolbar button:hover,
+.slipway-file-tree .ft-toolbar .ft-insert-image:hover { background: var(--bg-panel); }
 .slipway-file-tree .ft-body {
   flex: 1 1 auto;
   overflow-y: auto;

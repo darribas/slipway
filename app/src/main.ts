@@ -216,6 +216,7 @@ async function main(): Promise<void> {
         layout.setStatus(`Create folder failed: ${msgOf(e)}`, "error");
       }
     },
+    onImageFile: (file) => void handleImageFile(file),
     onDropFiles: async (files, targetDir) => {
       layout.setStatus(`Saving ${files.length} file${files.length === 1 ? "" : "s"}…`);
       const saved: string[] = [];
@@ -381,15 +382,8 @@ async function main(): Promise<void> {
       layout.setStatus(`Inserted ${path}`, "ok");
     } catch (e) {
       layout.setStatus(`Image insert failed: ${msgOf(e)}`, "error");
-    } finally {
-      layout.imageInput.value = "";
     }
   }
-
-  layout.imageInput.addEventListener("change", () => {
-    const file = layout.imageInput.files?.[0];
-    if (file) void handleImageFile(file);
-  });
 
   layout.exportBtn.addEventListener("click", async () => {
     await flushAllAutosaves();

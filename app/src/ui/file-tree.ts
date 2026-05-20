@@ -17,6 +17,8 @@ export interface FileTreeCallbacks {
   /** Called when files are dropped onto the tree. targetDir is the folder
    *  they were dropped on ("" = project root, "assets" = assets/, etc.) */
   onDropFiles: (files: File[], targetDir: string) => Promise<void> | void;
+  /** Called when the user picks an image via the Insert image button. */
+  onImageFile: (file: File) => Promise<void> | void;
 }
 
 export interface FileTreeHandle {
@@ -79,6 +81,9 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
     <div class="ft-toolbar">
       <button class="ft-new-file" title="New file at project root">＋ File</button>
       <button class="ft-new-folder" title="New folder at project root">＋ Folder</button>
+      <label class="ft-insert-image" title="Pick an image to insert at the cursor (or paste / drag-drop onto the editor)">
+        ＋ Image<input type="file" accept="image/*" style="display:none">
+      </label>
     </div>
     <div class="ft-body"></div>`;
 
@@ -93,6 +98,13 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
   parent.querySelector<HTMLButtonElement>(".ft-new-folder")!.addEventListener("click", () =>
     handleNewFolder(""),
   );
+
+  const imageInput = parent.querySelector<HTMLInputElement>(".ft-insert-image input")!;
+  imageInput.addEventListener("change", () => {
+    const file = imageInput.files?.[0];
+    if (file) void cb.onImageFile(file);
+    imageInput.value = "";
+  });
 
   function handleNewFile(parentDir: string): void {
     const name = window.prompt(
