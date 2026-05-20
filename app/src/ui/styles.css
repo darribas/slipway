@@ -1,30 +1,33 @@
 /* App-level styles. Component-scoped class names are prefixed `slipway-`. */
 
 :root {
-  --bg: #fafafa;
+  /* Icon palette: sky #B8D6EE · sand #F0D5B5 · charcoal #3a4a52 */
+  --bg: #f4f8fb;
   --bg-elev: #ffffff;
-  --bg-panel: #f0f0f0;
-  --border: #dddddd;
-  --border-strong: #bbbbbb;
+  --bg-panel: #e8f1f7;
+  --border: #cad5de;
+  --border-strong: #a6bbc8;
   --fg: #1a1a1a;
-  --fg-muted: #666666;
-  --accent: #24226f;
+  --fg-muted: #5c6e78;
+  --accent: #3a4a52;
   --accent-fg: #ffffff;
-  --warn: #f9c74f;
-  --error: #f94144;
+  --warn: #e8a020;
+  --error: #d63031;
   --ok: #4ea870;
   --toolbar-h: 48px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1a1a1a;
-    --bg-elev: #232323;
-    --bg-panel: #2a2a2a;
-    --border: #383838;
-    --border-strong: #555555;
-    --fg: #ececec;
-    --fg-muted: #999999;
+    --bg: #1c2428;
+    --bg-elev: #232d33;
+    --bg-panel: #2a353b;
+    --border: #364450;
+    --border-strong: #4a5e6a;
+    --fg: #e4edf2;
+    --fg-muted: #7a96a8;
+    --accent: #8fc5df;
+    --accent-fg: #1c2428;
   }
 }
 
@@ -71,12 +74,18 @@ html, body {
   padding: 0 12px;
   height: var(--toolbar-h);
   flex: 0 0 auto;
-  background: var(--bg-elev);
-  border-bottom: 1px solid var(--border);
+  background: #daeaf5;
+  border-bottom: 1px solid #b8d0e2;
   user-select: none;
   /* Stop touch scrolls in CodeMirror or the file tree from accidentally
      scrolling the toolbar off-screen on iPad. */
   overscroll-behavior: contain;
+}
+@media (prefers-color-scheme: dark) {
+  .slipway-toolbar {
+    background: #1c2428;
+    border-bottom-color: #364450;
+  }
 }
 .slipway-toolbar h1 {
   margin: 0 8px 0 0;
@@ -109,7 +118,7 @@ html, body {
   position: relative;
 }
 .slipway-toolbar button.primary:hover:not(:disabled) {
-  background: #1c1a55;
+  background: #2c3a40;
 }
 .slipway-toolbar button:disabled {
   opacity: 0.5;
@@ -236,15 +245,17 @@ kbd {
   white-space: nowrap;
 }
 .slipway-file-tree .ft-row:hover { background: var(--bg-panel); }
+.slipway-file-tree .ft-row.ft-drag-over,
+.slipway-file-tree .ft-body.ft-drag-over { background: rgba(58, 74, 82, 0.08); outline: 2px dashed var(--accent); outline-offset: -2px; }
 .slipway-file-tree .ft-row.active {
-  background: rgba(36, 34, 111, 0.12);
+  background: rgba(58, 74, 82, 0.12);
   color: var(--accent);
   font-weight: 500;
 }
 @media (prefers-color-scheme: dark) {
   .slipway-file-tree .ft-row.active {
-    background: rgba(255, 143, 66, 0.18);
-    color: #ffb583;
+    background: rgba(143, 197, 223, 0.16);
+    color: var(--accent);
   }
 }
 .slipway-file-tree .ft-chevron {

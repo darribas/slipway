@@ -30,8 +30,10 @@ import {
   probeCapabilities,
   remove,
   rename,
+  writeBytes,
   writeText,
 } from "./storage/storage";
+import { readFileBytes, saveImageToAssets } from "./core/image-insert";
 
 const AUTOSAVE_MS = 2_000;
 
@@ -51,7 +53,20 @@ interface OpenEditor {
 }
 
 async function main(): Promise<void> {
-  const layout = mountLayout(document.getElementById("app")!);
+  const appEl = document.getElementById("app")!;
+  const layout = mountLayout(appEl);
+
+  // iOS Safari: when the on-screen keyboard appears (e.g. vim command line),
+  // the visual viewport shrinks but the layout viewport does not always follow.
+  // Pinning #app's height to visualViewport.height is more reliable than dvh
+  // alone and prevents the toolbar from scrolling off-screen.
+  if (window.visualViewport) {
+    const lockHeight = () => {
+      appEl.style.height = `${window.visualViewport!.height}px`;
+    };
+    window.visualViewport.addEventListener("resize", lockHeight);
+    lockHeight();
+  }
 
   if (navigator.storage?.persist) void navigator.storage.persist();
 
@@ -201,6 +216,27 @@ async function main(): Promise<void> {
         layout.setStatus(`Create folder failed: ${msgOf(e)}`, "error");
       }
     },
+    onDropFiles: async (files, targetDir) => {
+      layout.setStatus(`Saving ${files.length} file${files.length === 1 ? "" : "s"}…`);
+      const saved: string[] = [];
+      const errors: string[] = [];
+      for (const file of files) {
+        const path = joinPath(targetDir, file.name);
+        try {
+          const bytes = await readFileBytes(file);
+          await writeBytes(path, bytes);
+          saved.push(path);
+        } catch (e) {
+          errors.push(`${file.name}: ${msgOf(e)}`);
+        }
+      }
+      await refreshTree();
+      if (errors.length) {
+        layout.setStatus(`Saved ${saved.length}, failed: ${errors.join("; ")}`, "error");
+      } else {
+        layout.setStatus(`Added ${saved.join(", ")}`, "ok");
+      }
+    },
   });
 
   // ---- Editor lifecycle ----------------------------------------------------
@@ -239,6 +275,7 @@ async function main(): Promise<void> {
       },
       onSave: () => void manualSave(open),
       onRender: () => void runRender(),
+      onImageFile: (file) => void handleImageFile(file, open),
     });
 
     // First editor opens to the left of Preview (so the right-hand column
@@ -326,6 +363,32 @@ async function main(): Promise<void> {
     } finally {
       layout.importInput.value = "";
     }
+  });
+
+  // ---- Image insertion (file picker, paste, drag-drop) --------------------
+
+  async function handleImageFile(file: File | Blob, targetOpen?: OpenEditor): Promise<void> {
+    const active = targetOpen ?? [...opens.values()].find((o) => o.path === getActiveEditor());
+    try {
+      layout.setStatus("Saving image…");
+      const bytes = await readFileBytes(file);
+      const path = await saveImageToAssets(bytes, file.type || "image/png");
+      await refreshTree();
+      if (active) {
+        active.handle.insertImageMarkdown(path);
+        if (active.path.toLowerCase().endsWith(".qmd")) layout.setStale(true);
+      }
+      layout.setStatus(`Inserted ${path}`, "ok");
+    } catch (e) {
+      layout.setStatus(`Image insert failed: ${msgOf(e)}`, "error");
+    } finally {
+      layout.imageInput.value = "";
+    }
+  }
+
+  layout.imageInput.addEventListener("change", () => {
+    const file = layout.imageInput.files?.[0];
+    if (file) void handleImageFile(file);
   });
 
   layout.exportBtn.addEventListener("click", async () => {

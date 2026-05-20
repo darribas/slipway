@@ -1,0 +1,278 @@
+---
+title: "Slipway"
+subtitle: "Everything your deck can do — right in your browser"
+author: "Your Name"
+date: today
+format:
+  revealjs:
+    theme: assets/theme.scss
+    navigation-mode: linear
+    controls-layout: bottom-right
+    center: false
+    slide-number: true
+title-slide-attributes:
+  data-background-color: "#B8D6EE"
+bibliography: assets/references.bib
+---
+
+# Getting started
+
+## The editor
+
+**Left pane** — edit Markdown + YAML frontmatter here.
+
+**⌘R** (or the **Render** button) — compile and preview the deck.
+
+**⌘S** — save. Autosave also runs every 2 seconds.
+
+::: notes
+Speaker notes go here — visible in the presenter view (press **S** while
+presenting on a desktop browser). This slide is inside the "Getting
+started" section, which is created by the `#` heading above it.
+:::
+
+## Files & projects
+
+| Action | How |
+|---|---|
+| Open a file | Click it in the **Files** panel |
+| Rename / delete | Action buttons on each row |
+| Add an image | Drag onto the **Files** panel |
+| Insert + link an image | **Insert image…** toolbar button |
+| Import a project | **Import zip** — replaces the current project |
+| Export a project | **Export zip** — downloads a `.zip` |
+
+# Text & structure
+
+## Inline formatting
+
+**Bold**, _italic_, ~~strikethrough~~, `inline code`.
+
+> Blockquote — handy for pull quotes or key takeaways.
+
+[Links](https://pandoc.org) work inline. Footnotes
+too.^[Footnotes render at the bottom of the slide.]
+
+Span classes from `assets/theme.scss`:
+[highlighted sky]{.hlg} · [highlighted sand]{.sand}
+
+## Headings inside a slide
+
+Headings below `##` become **in-slide subheadings**, not new slides.
+
+### This is an H3
+
+Content under the H3 stays on the same slide.
+
+#### H4 and below work too
+
+Use them sparingly — keep slides readable at a distance.
+
+## Tables
+
+| Feature | Status | Notes |
+|---|---|---|
+| Pandoc citeproc | ✓ | `.bib` via YAML frontmatter |
+| KaTeX math | ✓ | works offline |
+| SCSS themes | ✓ | compiled by Dart Sass |
+| `{{< include >}}` | ✓ | pre-processed before pandoc |
+| Code execution | — | out of scope by design |
+
+# Lists & fragments
+
+## Incremental list
+
+Wrap any list in `::: {.incremental}` to reveal items one by one:
+
+::: {.incremental}
+- First item — visible immediately
+- Second item — press **→** to reveal
+- Third item — and so on
+:::
+
+Works with ordered lists too.
+
+## Fragments on any element
+
+The `.fragment` class works on any fenced div, not just lists:
+
+::: {.fragment}
+A whole paragraph that fades in.
+:::
+
+::: {.fragment .highlight-red}
+Text that highlights red.
+:::
+
+::: {.fragment .fade-out}
+Text that fades out.
+:::
+
+## Fragment order
+
+Control reveal order with `fragment-index`:
+
+::: {.fragment fragment-index=2}
+I appear **second**.
+:::
+
+::: {.fragment fragment-index=1}
+I appear **first** — even though I'm written second.
+:::
+
+# Layouts
+
+## Two columns
+
+:::: {.columns}
+
+::: {.column width="55%"}
+**Left (55 %)**
+
+Any content works here: text, code, images, lists.
+:::
+
+::: {.column width="45%"}
+**Right (45 %)**
+
+Column widths must sum to 100 %.
+
+- Lists
+- Work fine
+- Here too
+:::
+
+::::
+
+## Three columns
+
+:::: {.columns}
+
+::: {.column width="33%"}
+**One-third**
+
+Short blurb.
+:::
+
+::: {.column width="34%"}
+**One-third**
+
+Another blurb.
+:::
+
+::: {.column width="33%"}
+**One-third**
+
+Third blurb.
+:::
+
+::::
+
+# Code & math
+
+## Code blocks {.smaller}
+
+Syntax highlighting for dozens of languages, no execution:
+
+```python
+def fibonacci(n: int) -> list[int]:
+    """Yield the first n Fibonacci numbers."""
+    a, b = 0, 1
+    result = []
+    for _ in range(n):
+        result.append(a)
+        a, b = b, a + b
+    return result
+```
+
+Use `{.smaller}` on the slide heading to shrink the font.
+
+## Math
+
+Rendered by KaTeX — works fully offline.
+
+Inline: $f(x) = \frac{1}{\sigma\sqrt{2\pi}}\,e^{-\frac{(x-\mu)^2}{2\sigma^2}}$
+
+Display:
+
+$$
+\hat{\boldsymbol{\beta}} =
+  \bigl(\mathbf{X}^\top \mathbf{X}\bigr)^{-1}\mathbf{X}^\top \mathbf{y}
+$$
+
+# Slide attributes
+
+## Centred slide {.center}
+
+This slide has `{.center}` on the heading, so content is vertically
+centred in the frame.
+
+Useful for chapter-break slides or key quotes.
+
+## Smaller font {.smaller}
+
+`{.smaller}` on the heading reduces the font size — good for slides with
+more content than usual. Combine with trimming the copy if it still feels
+dense: slides are not documents.
+
+Attributes you can put on any `##` heading:
+
+| Attribute | Effect |
+|---|---|
+| `{.center}` | Vertically centre content |
+| `{.smaller}` | Reduce font size |
+| `{.incremental}` | Animate all lists on this slide |
+
+## Coloured background {background-color="#F0D5B5"}
+
+The heading carries `{background-color="#F0D5B5"}` (sand).
+
+Any CSS colour works. Images too:
+
+```markdown
+## Photo slide {background-image="assets/photo.jpg"}
+## Darker slide {background-color="#1c2428"}
+```
+
+## {{< include >}} shortcode
+
+{{< include _snippet.md >}}
+
+The content above is pulled from `_snippet.qmd` at render time — Slipway
+preprocesses `{{< include >}}` before handing off to Pandoc.
+
+Useful for shared slide fragments, recurring disclaimers, or boilerplate.
+
+# Citations & references
+
+## Citations
+
+Declare a `.bib` file in the YAML frontmatter, then cite inline:
+
+```markdown
+bibliography: assets/references.bib
+```
+
+Pandoc [@pandoc] converts Markdown to reveal.js HTML. The presentation
+framework is reveal.js [@revealjs].
+
+A bibliography slide is appended automatically by the `#refs` div.
+
+## Images
+
+Drop files onto the **Files** panel to add them by original filename, then
+reference by path:
+
+```markdown
+![A caption](assets/photo.jpg)
+![Sized to 70 %](assets/photo.jpg){width=70%}
+```
+
+Or use **Insert image…** — saves to `assets/` with a timestamp filename
+and inserts `![](…)` at the cursor. Images are inlined as data URIs on
+render, so they work offline and survive export.
+
+## References
+
+::: {#refs}
+:::

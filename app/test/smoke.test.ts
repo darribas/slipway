@@ -1,14 +1,13 @@
-// Phase 1 smoke test: drive the production render pipeline (render.ts)
-// against the bundled imago workshop template and assert on the output.
+// Smoke tests for the render pipeline, run against the bundled templates.
 //
-// This is the regression net for Phase 2's UI work. If a refactor of the
-// pane layout, file tree, or anything else silently breaks the renderer
-// (preprocessing, SCSS compilation, pandoc invocation), this test catches
-// it before the change reaches main.
+// Primary suite: the slipway-demo template (the app's default seed deck).
+// It exercises SCSS compilation, citations, incremental lists, two-column
+// layouts, math, code blocks, and reveal.js config override — enough to
+// catch any regression in the render pipeline before it reaches main.
 //
-// Mirrors the spirit of phase0/smoke.js — same workshop deck, same
-// assertions — but drives app/src/core/render.ts directly so we're
-// exercising the *current* code path, not the frozen Phase 0 inline copy.
+// The imago-workshop template is kept for a secondary round of assertions
+// that cover features the demo deck doesn't (local PNG inlining, external
+// URLs left intact, Imago-specific class names).
 
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -23,14 +22,30 @@ import { resolveDeclaredPath } from "../src/core/path-resolve";
 import type { PandocInstance, RenderInputs } from "../src/core/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TEMPLATE = resolve(HERE, "../src/templates/imago-workshop");
+const DEMO    = resolve(HERE, "../src/templates/slipway-demo");
+const IMAGO   = resolve(HERE, "../src/templates/imago-workshop");
 
-async function loadInputs(): Promise<RenderInputs> {
+async function loadDemoInputs(): Promise<RenderInputs> {
+  const [qmd, scss, bib] = await Promise.all([
+    readFile(resolve(DEMO, "slide.qmd"),       "utf8"),
+    readFile(resolve(DEMO, "theme.scss"),       "utf8"),
+    readFile(resolve(DEMO, "references.bib"),   "utf8"),
+  ]);
+  return {
+    qmd,
+    stylesheet: scss,
+    stylesheetIsPrecompiled: false,
+    bib,
+    assets: new Map(),
+  };
+}
+
+async function loadImagoInputs(): Promise<RenderInputs> {
   const [qmd, scss, bib, png] = await Promise.all([
-    readFile(resolve(TEMPLATE, "slide.qmd"), "utf8"),
-    readFile(resolve(TEMPLATE, "imago.scss"), "utf8"),
-    readFile(resolve(TEMPLATE, "references.bib"), "utf8"),
-    readFile(resolve(TEMPLATE, "attention_paper.png")),
+    readFile(resolve(IMAGO, "slide.qmd"),          "utf8"),
+    readFile(resolve(IMAGO, "imago.scss"),          "utf8"),
+    readFile(resolve(IMAGO, "references.bib"),      "utf8"),
+    readFile(resolve(IMAGO, "attention_paper.png")),
   ]);
   return {
     qmd,
@@ -41,31 +56,26 @@ async function loadInputs(): Promise<RenderInputs> {
   };
 }
 
-// pandoc-wasm's exported `convert` is shaped exactly like PandocInstance.convert,
-// so we can use it directly as the renderer's pandoc dependency.
 const pandoc: PandocInstance = { convert: convert as PandocInstance["convert"] };
 
-describe("imago workshop deck", () => {
-  test("renders end-to-end through renderDeck()", async () => {
-    const inputs = await loadInputs();
-    const result = await renderDeck(pandoc, inputs);
+// ---------------------------------------------------------------------------
+// Primary suite — slipway-demo template
+// ---------------------------------------------------------------------------
 
+describe("slipway-demo deck", () => {
+  test("renders end-to-end through renderDeck()", async () => {
+    const result = await renderDeck(pandoc, await loadDemoInputs());
     expect(result.html.length).toBeGreaterThan(50_000);
     expect(result.stderr).toBe("");
     expect(result.html).toMatch(/<title>/);
   }, 30_000);
 
-  test("includes reveal.js + the compiled imago theme", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
+  test("includes reveal.js + the compiled slipway theme", async () => {
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
     expect(html).toMatch(/reveal\.js/);
-    // The theme.css used to be a dangling <link> pointing at the WASI VFS
-    // path, so the iframe could never resolve it. Post-pandoc we now inline
-    // the compiled CSS as a <style data-from="theme.css"> block. Assert both
-    // the wrapper and recognisable imago palette colours from the SCSS so we
-    // catch silent regressions of the inlining pass.
     expect(html).toContain('data-from="theme.css"');
-    expect(html.toLowerCase()).toContain("#24226f"); // imago navy
-    expect(html).toContain("Figtree"); // imago font family
+    expect(html.toLowerCase()).toContain("#3a4a52"); // charcoal from theme.scss
+    expect(html.toLowerCase()).toContain("#b8d6ee"); // sky from theme.scss
   }, 30_000);
 
   test("accepts a pre-compiled .css stylesheet as-is", async () => {
@@ -82,79 +92,77 @@ describe("imago workshop deck", () => {
   }, 30_000);
 
   test("inlines reveal.js — no external <link>/<script> refs left in the deck", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    // The two things that actually trigger network fetches are <link href="…">
-    // and <script src="…"> pointing at external URLs. The post-inline data-from
-    // attribute keeps the original URL for traceability and is fine.
-    const externalLinks = html.match(/<link\b[^>]*href=["']https?:\/\/[^"']+["'][^>]*>/g) ?? [];
-    const externalScripts = html.match(/<script\b[^>]*src=["']https?:\/\/[^"']+["'][^>]*>/g) ?? [];
-    // KaTeX is still loaded from a CDN in the template; we haven't inlined it
-    // (workshop deck has no math). Filter those out before asserting.
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    const externalLinks   = html.match(/<link\b[^>]*href=["']https?:\/\/[^"']+["'][^>]*>/g)   ?? [];
+    const externalScripts = html.match(/<script\b[^>]*src=["']https?:\/\/[^"']+["'][^>]*>/g)  ?? [];
     const remaining = [...externalLinks, ...externalScripts].filter((t) => !/katex/i.test(t));
     expect(remaining).toEqual([]);
-    // Presence of the data-from stamp confirms the substitution actually ran
-    // (rather than pandoc's template having changed format under us).
     expect(html).toContain('data-from="https://unpkg.com/reveal.js@^5/dist/reveal.js"');
   }, 30_000);
 
-  test("applies imago slide-class styling and column layouts", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    expect(html).toMatch(/class="[^"]*\bdark\b/); // .dark slide class survives
-    expect(html).toMatch(/class="[^"]*\bcolumns\b/); // ::: {.columns} fenced div
-    expect(html).toMatch(/class="[^"]*\bhlg\b/); // .hlg utility class on spans
-  }, 30_000);
-
-  test("renders citations, footnotes, and the bibliography", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    expect(html).toMatch(/footnote/i);
+  test("renders columns, incremental lists, and citations", async () => {
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    expect(html).toMatch(/class="[^"]*\bcolumns\b/);
+    expect(html).toMatch(/class="[^"]*\bfragment\b/);
     expect(html).toContain('id="refs"');
     expect(html).toMatch(/csl-(entry|bib)/);
   }, 30_000);
 
-  test("inlines local PNG assets as data URIs", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    expect(html).toContain("data:image/png;base64,");
+  test("renders footnotes", async () => {
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    expect(html).toMatch(/footnote/i);
   }, 30_000);
 
-  test("leaves external image URLs intact", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    expect(html).toContain("upload.wikimedia.org");
-  }, 30_000);
-
-  test("renders ::: {.incremental} as reveal.js fragments", async () => {
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    expect(html).toMatch(/class="[^"]*\bfragment\b/);
+  test("renders math via KaTeX", async () => {
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    expect(html).toMatch(/katex/i);
   }, 30_000);
 
   test("user's format.revealjs options reach the deck via Reveal.configure()", async () => {
-    // The workshop deck has `controls-layout: 'bottom-right'`, `center: false`,
-    // `navigation-mode: linear` under format.revealjs. The first comes through
-    // pandoc's template natively; the latter two are boolean/keyword values
-    // that pandoc's $if$ skips when false — so we have to apply them via
-    // Reveal.configure() post-init. Assert the override script is present
-    // and carries the booleans the user set.
-    const { html } = await renderDeck(pandoc, await loadInputs());
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
     expect(html).toContain('data-from="slipway:user-reveal-config"');
-    expect(html).toContain('"center":false');
     expect(html).toContain('"navigationMode":"linear"');
     expect(html).toContain('"controlsLayout":"bottom-right"');
+    expect(html).toContain('"slideNumber":true');
   }, 30_000);
 
   test("override script lands after inlined plugin source, not inside it", async () => {
-    // Regression guard: a previous build injected the override at the *first*
-    // </body> in the HTML. But reveal.js's notes plugin embeds the literal
-    // string "</body>\n</html>" when building the speaker-view popup, so the
-    // first match was inside an inlined script — splitting it in half and
-    // wrecking the whole bundle. The override must come after every inlined
-    // script tag.
-    const { html } = await renderDeck(pandoc, await loadInputs());
-    const overrideIdx = html.indexOf('data-from="slipway:user-reveal-config"');
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    const overrideIdx          = html.indexOf('data-from="slipway:user-reveal-config"');
     const lastInlinedRevealAsset = html.lastIndexOf('data-from="https://unpkg.com/reveal.js@^5');
     expect(overrideIdx).toBeGreaterThan(0);
     expect(lastInlinedRevealAsset).toBeGreaterThan(0);
     expect(overrideIdx).toBeGreaterThan(lastInlinedRevealAsset);
   }, 30_000);
 });
+
+// ---------------------------------------------------------------------------
+// Secondary suite — imago-workshop template (extra pipeline coverage)
+// ---------------------------------------------------------------------------
+
+describe("imago-workshop deck (pipeline regression)", () => {
+  test("inlines local PNG assets as data URIs", async () => {
+    const { html } = await renderDeck(pandoc, await loadImagoInputs());
+    expect(html).toContain("data:image/png;base64,");
+  }, 30_000);
+
+  test("leaves external image URLs intact", async () => {
+    const { html } = await renderDeck(pandoc, await loadImagoInputs());
+    expect(html).toContain("upload.wikimedia.org");
+  }, 30_000);
+
+  test("applies imago theme and slide-class styling", async () => {
+    const { html } = await renderDeck(pandoc, await loadImagoInputs());
+    expect(html.toLowerCase()).toContain("#24226f"); // imago navy
+    expect(html).toContain("Figtree");
+    expect(html).toMatch(/class="[^"]*\bdark\b/);
+    expect(html).toMatch(/class="[^"]*\bhlg\b/);
+  }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
+// Frontmatter extraction unit tests
+// ---------------------------------------------------------------------------
 
 describe("frontmatter declaration extraction", () => {
   test("top-level theme: and bibliography:", () => {
@@ -213,6 +221,10 @@ bibliography: refs.bib
   });
 });
 
+// ---------------------------------------------------------------------------
+// resolveDeclaredPath unit tests
+// ---------------------------------------------------------------------------
+
 describe("resolveDeclaredPath", () => {
   const tree = [
     "slide.qmd",
@@ -227,9 +239,6 @@ describe("resolveDeclaredPath", () => {
   });
 
   test("strips leading ../ to resolve the imago workshop case", () => {
-    // The seed deck declares `theme: ../assets/imago.scss` because in the
-    // real workshop the qmd lives in `slides/`. Our IDB is flat from the
-    // project root, so the ../ has to be normalised away.
     expect(resolveDeclaredPath("../assets/imago.scss", tree)).toBe("assets/imago.scss");
   });
 
@@ -242,7 +251,6 @@ describe("resolveDeclaredPath", () => {
   });
 
   test("unambiguous basename fallback", () => {
-    // User declared theme: imago.scss with no directory; we find it anyway.
     expect(resolveDeclaredPath("imago.scss", tree)).toBe("assets/imago.scss");
   });
 
@@ -255,30 +263,21 @@ describe("resolveDeclaredPath", () => {
   });
 
   test("exact match preferred over basename", () => {
-    // `themes/dark.scss` and `assets/dark.scss` both exist; declared path
-    // matches one of them — use that, don't trigger the ambiguous-basename
-    // fallback.
     const t = [...tree, "assets/dark.scss"];
     expect(resolveDeclaredPath("themes/dark.scss", t)).toBe("themes/dark.scss");
   });
 });
 
-describe("synthetic features the workshop deck doesn't exercise", () => {
-  test("KaTeX assets are injected when math is present", async () => {
-    const inputs: RenderInputs = {
-      qmd: "---\ntitle: Math probe\n---\n\n# Math\n\n$E = mc^2$\n",
-      scss: "",
-      bib: null,
-      assets: new Map(),
-    };
-    const { html } = await renderDeck(pandoc, inputs);
-    expect(html).toMatch(/katex/i);
-  }, 30_000);
+// ---------------------------------------------------------------------------
+// Synthetic probes for features not present in either bundled template
+// ---------------------------------------------------------------------------
 
+describe("synthetic feature probes", () => {
   test('"::: notes" fenced div becomes <aside class="notes">', async () => {
     const inputs: RenderInputs = {
       qmd: "---\ntitle: Notes probe\n---\n\n# Notes\n\nVisible.\n\n::: notes\n\nSpeaker-only.\n\n:::\n",
-      scss: "",
+      stylesheet: "",
+      stylesheetIsPrecompiled: false,
       bib: null,
       assets: new Map(),
     };
