@@ -16,6 +16,8 @@ export interface LayoutHandle {
   status: HTMLSpanElement;
   setStale: (stale: boolean) => void;
   setStatus: (text: string, kind?: "info" | "warn" | "error" | "ok") => void;
+  /** Update the persistent offline-readiness indicator in the toolbar. */
+  setOfflineReady: (ready: boolean) => void;
 }
 
 export function mountLayout(root: HTMLElement): LayoutHandle {
@@ -52,6 +54,12 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
 
   toolbar.appendChild(el("span", "spacer"));
 
+  const offlineIndicator = el("span", "offline-indicator") as HTMLSpanElement;
+  offlineIndicator.textContent = "✈";
+  offlineIndicator.dataset.ready = "false";
+  offlineIndicator.title = "Offline mode not yet ready";
+  toolbar.appendChild(offlineIndicator);
+
   const status = el("span", "status") as HTMLSpanElement;
   toolbar.appendChild(status);
 
@@ -78,6 +86,12 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
     setStatus: (text, kind = "info") => {
       status.textContent = text;
       status.className = `status ${kind === "info" ? "" : kind}`.trim();
+    },
+    setOfflineReady: (ready) => {
+      offlineIndicator.dataset.ready = ready ? "true" : "false";
+      offlineIndicator.title = ready
+        ? "App is cached and works offline"
+        : "Offline mode not yet ready — stay connected while assets cache";
     },
   };
 }

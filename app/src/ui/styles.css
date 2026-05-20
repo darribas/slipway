@@ -128,6 +128,40 @@ html, body {
 
 .slipway-toolbar .spacer { flex: 1 1 auto; }
 
+.slipway-toolbar .offline-indicator {
+  position: relative;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: default;
+  flex: 0 0 auto;
+  /* Vertically centre the plane glyph with the toolbar buttons. */
+  display: flex;
+  align-items: center;
+}
+.slipway-toolbar .offline-indicator[data-ready="true"] {
+  color: var(--ok);
+}
+.slipway-toolbar .offline-indicator[data-ready="false"] {
+  color: var(--fg-muted);
+}
+/* Red diagonal slash drawn over the plane when offline is not yet ready. */
+.slipway-toolbar .offline-indicator[data-ready="false"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* A single 2px line rotated -45° through the centre of the icon. */
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px),
+    var(--error) calc(50% - 1px),
+    var(--error) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+  border-radius: 1px;
+  pointer-events: none;
+}
+
 .slipway-toolbar .status {
   color: var(--fg-muted);
   font-size: 12px;
