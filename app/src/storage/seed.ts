@@ -1,30 +1,26 @@
-// First-run seed: copy the bundled imago workshop template into OPFS so the
+// First-run seed: copy the bundled slipway-demo template into IDB so the
 // app has something to render the first time it's opened.
 //
-// Text files use ?raw so Vite inlines the raw source into the JS bundle — we
-// must keep the SCSS unprocessed so our render pipeline can recompile it
-// after the user edits it. The PNG uses ?url so it stays a separate asset.
+// All files are text, so ?raw imports are used throughout — Vite inlines the
+// source into the JS bundle and the render pipeline can recompile the SCSS
+// after the user edits it.
 
-import slideQmd from "../templates/imago-workshop/slide.qmd?raw";
-import imagoScss from "../templates/imago-workshop/imago.scss?raw";
-import referencesBib from "../templates/imago-workshop/references.bib?raw";
-import attentionPngUrl from "../templates/imago-workshop/attention_paper.png?url";
+import slideQmd      from "../templates/slipway-demo/slide.qmd?raw";
+import snippetQmd    from "../templates/slipway-demo/_snippet.md?raw";
+import themeScss     from "../templates/slipway-demo/theme.scss?raw";
+import referencesBib from "../templates/slipway-demo/references.bib?raw";
 
-import { exists, writeBytes, writeText } from "./storage";
+import { exists, writeText } from "./storage";
 
 const SEED_MARKER = ".seeded";
 
 export async function seedIfEmpty(): Promise<boolean> {
   if (await exists(SEED_MARKER)) return false;
 
-  const pngResp = await fetch(attentionPngUrl);
-  if (!pngResp.ok) throw new Error(`Seed PNG fetch failed: ${pngResp.status}`);
-  const png = new Uint8Array(await pngResp.arrayBuffer());
-
   await writeText("slide.qmd", slideQmd);
-  await writeText("assets/imago.scss", imagoScss);
+  await writeText("_snippet.md", snippetQmd);
+  await writeText("assets/theme.scss", themeScss);
   await writeText("assets/references.bib", referencesBib);
-  await writeBytes("assets/attention_paper.png", png);
   await writeText(SEED_MARKER, new Date().toISOString());
   return true;
 }
