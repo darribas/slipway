@@ -508,6 +508,21 @@ This increment splits them out:
 
 Documentation-only; no code change.
 
+### Increment 27: iPad keyboard avoidance without reflowing the app
+
+Daily-use friction on the installed iPad PWA: opening the on-screen keyboard — or triggering the vim command line — resized and shoved the whole interface, unlike native apps (e.g. Obsidian).
+
+Root cause was increment 13's own keyboard handling. A `visualViewport` resize listener pinned `#app`'s height to `visualViewport.height`, so the keyboard shrank the entire app: `#app` is a `toolbar / 1fr` grid, so every pane (editor, preview, file tree) reflowed into the smaller box. The listener also ignored `visualViewport.offsetTop`, so when iOS scrolled the visual viewport to lift the caret above the keyboard, `#app` wasn't repositioned and the toolbar rode off the top.
+
+Fix — inset only the focused editor, the way native apps do:
+
+- `main.ts`: the `#app`-resizing listener is gone. `#app` stays `100dvh` (which doesn't shrink for the keyboard), and `html` / `body` are already `position: fixed`, so the toolbar can't scroll away. A small `visualViewport` `resize` + `scroll` listener computes the keyboard overlap (`innerHeight − visualViewport.height − offsetTop`) and writes it to the `--keyboard-inset` CSS variable.
+- `styles.css`: `.cm-editor` gets `padding-bottom: var(--keyboard-inset, 0px)` with a 150 ms transition. The focused editor's content — text area and the vim command line, which is a CodeMirror bottom panel inside `.cm-editor` — lifts above the keyboard; the toolbar, preview and file tree don't move. CodeMirror keeps the caret inside the now-shorter scroller itself, so iOS no longer force-scrolls the viewport.
+
+Side effect: the Dockview re-layout jank goes too — `resizeDock` was bound to `window.resize`, which the keyboard doesn't fire, so panels used to go stale-sized mid-reflow. With `#app` no longer resizing there's nothing to re-lay-out.
+
+Editor-only; smoke test unaffected (27/27). Needs verification on a real iPad — keyboard behaviour can't be exercised in the headless sandbox.
+
 -----
 
 ## Repo cleanup (deferred)
