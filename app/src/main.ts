@@ -57,21 +57,22 @@ async function main(): Promise<void> {
   const appEl = document.getElementById("app")!;
   const layout = mountLayout(appEl);
 
-  // iPad on-screen keyboard avoidance. The keyboard shrinks the visual
-  // viewport but not the layout viewport. Resizing #app to match (the old
-  // approach) reflowed every pane and rode the toolbar off-screen. Instead,
-  // expose the keyboard's overlap as the --keyboard-inset CSS variable; the
-  // focused editor insets itself by that much via .cm-editor in styles.css,
-  // so the app shell — toolbar, preview, file tree — never moves.
+  // iPad keyboard avoidance. When the on-screen keyboard — or, with a
+  // hardware keyboard attached, the accessory/shortcuts bar — appears, iOS
+  // shrinks the visual viewport and shifts the layout up, riding the
+  // toolbar off the top of the screen. Pin #app to exactly cover the
+  // visual viewport: height tracks visualViewport.height so the lost space
+  // comes off the bottom, and the transform re-anchors the top edge to the
+  // visible area instead of letting it scroll past the top of the screen.
   const vv = window.visualViewport;
   if (vv) {
-    const updateKeyboardInset = () => {
-      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.documentElement.style.setProperty("--keyboard-inset", `${overlap}px`);
+    const syncViewport = () => {
+      appEl.style.height = `${vv.height}px`;
+      appEl.style.transform = `translate(${vv.offsetLeft}px, ${vv.offsetTop}px)`;
     };
-    vv.addEventListener("resize", updateKeyboardInset);
-    vv.addEventListener("scroll", updateKeyboardInset);
-    updateKeyboardInset();
+    vv.addEventListener("resize", syncViewport);
+    vv.addEventListener("scroll", syncViewport);
+    syncViewport();
   }
 
   if (navigator.storage?.persist) void navigator.storage.persist();
@@ -144,7 +145,9 @@ async function main(): Promise<void> {
   let filesAdded = false;
   const resizeDock = () => dock.layout(layout.paneHost.clientWidth, layout.paneHost.clientHeight);
   resizeDock();
-  window.addEventListener("resize", resizeDock);
+  // Re-layout on any pane-host size change: window resize, splitter drags,
+  // and the #app height change when the iPad keyboard opens or closes.
+  new ResizeObserver(resizeDock).observe(layout.paneHost);
 
   // Dock-level events dispatch to whichever OpenEditor owns the panel id.
   // Doing it here (rather than per-panel) keeps the lifecycle in one place
