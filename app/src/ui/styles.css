@@ -49,11 +49,17 @@ html, body {
 }
 
 #app {
-  /* dvh = "dynamic viewport height", which on iOS PWAs accounts for the
-     visible viewport after the status bar / home indicator are subtracted.
-     vh on iOS includes off-screen browser chrome and overflows when
-     installed to Home Screen. Fallback to vh for browsers that don't grok
-     dvh yet. */
+  /* Pinned to the visual viewport. position: fixed anchors the top-left
+     corner; main.ts then sets height + a translate transform from
+     window.visualViewport so the iPad keyboard / accessory bar takes its
+     space off the bottom instead of shoving the toolbar off the top.
+     The dvh height is the fallback before that sync runs (and on browsers
+     without visualViewport): dvh tracks the visible viewport, unlike vh
+     which counts off-screen browser chrome on iOS. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 100vh;
   height: 100dvh;
   display: grid;
@@ -212,15 +218,6 @@ html, body {
 .cm-editor .cm-scroller {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-}
-
-/* iPad keyboard avoidance: when the on-screen keyboard is up, inset the
-   focused editor's content (text area + vim command line) above it. Only
-   the editor moves — the toolbar, preview and file tree stay put.
-   --keyboard-inset is maintained from visualViewport in main.ts. */
-.cm-editor {
-  padding-bottom: var(--keyboard-inset, 0px);
-  transition: padding-bottom 0.15s ease-out;
 }
 
 /* Preview */

@@ -523,6 +523,20 @@ Side effect: the Dockview re-layout jank goes too — `resizeDock` was bound to 
 
 Editor-only; smoke test unaffected (27/27). Needs verification on a real iPad — keyboard behaviour can't be exercised in the headless sandbox.
 
+### Increment 28: iPad keyboard avoidance — pin #app to the visual viewport
+
+Increment 27 was tested on a real iPad and didn't hold up. The deployment iPad uses a *hardware* keyboard, so the failing case isn't the full on-screen keyboard but the accessory/shortcuts bar iOS shows along the bottom (microphone, language picker). When it appears, iOS shrinks the visual viewport and shifts the layout up by roughly the bar's height — the app keeps its full height but its top, toolbar included, rides off the top of the screen.
+
+Increment 27's fix (inset `.cm-editor` by the keyboard overlap) addressed the wrong thing: it kept the app full-height and only padded the editor, so the whole layout still got shoved up. The wanted behaviour is the opposite — let the app *lose* that height off the bottom and keep the top pinned.
+
+Fix:
+
+- `main.ts`: the `--keyboard-inset` listener is replaced by one that pins `#app` to the visual viewport — `height` tracks `visualViewport.height` (so the lost space comes off the bottom) and a `translate(offsetLeft, offsetTop)` transform re-anchors the top edge to the visible area, undoing the iOS shift. Driven by `visualViewport`'s `resize` + `scroll` events.
+- `styles.css`: `#app` becomes `position: fixed` (`top`/`left`/`right: 0`) so the transform has a stable anchor; the `100dvh` height stays as the pre-sync fallback. The increment-27 `.cm-editor` padding rule is reverted.
+- `main.ts`: the Dockview re-layout is now driven by a `ResizeObserver` on the pane host instead of the `window` `resize` event — `window` doesn't fire when only `#app`'s inline height changes, so the dock used to go stale-sized whenever the keyboard opened.
+
+Editor/shell-only; smoke test 27/27. Still needs confirming on the iPad.
+
 -----
 
 ## Repo cleanup (deferred)
