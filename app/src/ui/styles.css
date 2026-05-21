@@ -214,6 +214,15 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* iPad keyboard avoidance: when the on-screen keyboard is up, inset the
+   focused editor's content (text area + vim command line) above it. Only
+   the editor moves — the toolbar, preview and file tree stay put.
+   --keyboard-inset is maintained from visualViewport in main.ts. */
+.cm-editor {
+  padding-bottom: var(--keyboard-inset, 0px);
+  transition: padding-bottom 0.15s ease-out;
+}
+
 /* Preview */
 .slipway-preview-iframe {
   width: 100%;

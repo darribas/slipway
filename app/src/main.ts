@@ -57,16 +57,21 @@ async function main(): Promise<void> {
   const appEl = document.getElementById("app")!;
   const layout = mountLayout(appEl);
 
-  // iOS Safari: when the on-screen keyboard appears (e.g. vim command line),
-  // the visual viewport shrinks but the layout viewport does not always follow.
-  // Pinning #app's height to visualViewport.height is more reliable than dvh
-  // alone and prevents the toolbar from scrolling off-screen.
-  if (window.visualViewport) {
-    const lockHeight = () => {
-      appEl.style.height = `${window.visualViewport!.height}px`;
+  // iPad on-screen keyboard avoidance. The keyboard shrinks the visual
+  // viewport but not the layout viewport. Resizing #app to match (the old
+  // approach) reflowed every pane and rode the toolbar off-screen. Instead,
+  // expose the keyboard's overlap as the --keyboard-inset CSS variable; the
+  // focused editor insets itself by that much via .cm-editor in styles.css,
+  // so the app shell — toolbar, preview, file tree — never moves.
+  const vv = window.visualViewport;
+  if (vv) {
+    const updateKeyboardInset = () => {
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--keyboard-inset", `${overlap}px`);
     };
-    window.visualViewport.addEventListener("resize", lockHeight);
-    lockHeight();
+    vv.addEventListener("resize", updateKeyboardInset);
+    vv.addEventListener("scroll", updateKeyboardInset);
+    updateKeyboardInset();
   }
 
   if (navigator.storage?.persist) void navigator.storage.persist();
