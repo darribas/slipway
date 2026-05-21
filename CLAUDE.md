@@ -30,9 +30,8 @@ The deployed app lives at <https://darribas.org/slipway/> (and
   - "User-testing backlog (Phase 2)" — items the user has reported but
     hasn't been worked yet
   - "Repo cleanup (deferred)" — things to clean up at the next stopping
-    point (notably: remove `phase0/` once Phase 2 is stable; fix Dockview
-    theme cascade; inline KaTeX; migrate imago.scss off deprecated Sass
-    functions)
+    point (notably: fix the Dockview theme cascade; migrate the
+    `imago.scss` render fixture off deprecated Sass functions)
 
 Commit messages also carry substantive context — `git log` is informative.
 
@@ -40,20 +39,18 @@ Commit messages also carry substantive context — `git log` is informative.
 
 ```
 SPEC.md, PHASES.md, LICENSE           project-level docs
-phase0/                                Phase 0 validation prototype (slated
-                                       for removal once Phase 2 is settled
-                                       — see PHASES.md cleanup list)
 app/                                   the Vite project; everything else
                                        lives under here
   src/                                 TS sources
     core/                              renderer (pandoc, sass, preprocess,
                                        inline-assets, frontmatter,
-                                       path-resolve)
+                                       path-resolve, image-insert)
     storage/                           IDB-backed storage + project model
     ui/                                editor (CodeMirror 6 + vim), preview,
                                        file tree, Dockview layout
-    templates/imago-workshop/          seed deck
+    templates/slipway-demo/            seed deck
   test/smoke.test.ts                   end-to-end render assertions
+  test/fixtures/imago-workshop/        secondary render fixture (test-only)
   scripts/render-icons.mjs             one-shot icon regenerator
   public/                              icon files + manifest.webmanifest
 .github/workflows/                     deploy.yml + ci.yml

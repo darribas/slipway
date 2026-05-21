@@ -364,17 +364,136 @@ Smoke test added 11 new unit-level assertions:
 
 Total now 23/23 passing. The existing imago workshop end-to-end render still hits the same `assets/imago.scss` it always did, but now via the declaration-driven path rather than by accident.
 
+### Increment 10: Default workspace layout
+
+Two commits getting the opening pane arrangement right. The app previously opened as three columns (Files | Editor | Preview). The new default puts the editor full-height on the left and splits the right column between Preview (top) and Files (bottom) — more horizontal room for editing while keeping both the deck preview and the file tree visible.
+
+The first cut docked the Files panel "below preview" while preview was still the only panel, so Dockview placed it below the *entire root* and it spanned the full bottom width. Fix: dock Files lazily — only after the first editor has opened to the left of preview and split the grid into two columns — so "below preview" resolves to just the right column.
+
+Result: Editor (full left) | Preview (top right) / Files (bottom right). Subsequent editors stack as tabs in the editor group wherever the user has dragged it. `main.ts` only; smoke test 25/25.
+
+### Increment 11: Image insertion — paste, drag-drop, file picker
+
+The three image-insertion flows from `SPEC.md`. All save the image to `assets/YYYYMMDD-HHMMSS.ext` and insert `![](assets/...)` at the cursor in the active editor.
+
+- New `core/image-insert.ts`: `timestampFilename()`, `saveImageToAssets()`, `readFileBytes()`.
+- `ui/editor.ts`: paste and drop handlers wired through `EditorView.domEventHandlers`; an `onImageFile` callback on `EditorOptions` and an `insertImageMarkdown(path)` method on `EditorHandle`.
+- `ui/layout.ts`: an "Insert image…" toolbar button backed by a hidden `<input type="file" accept="image/*">`.
+- `main.ts`: `handleImageFile()` wires all three entry points — picker change, editor paste, editor drag-drop — to `saveImageToAssets`, refreshes the file tree, then inserts the markdown at the active tab.
+
+Smoke test 25/25 (editor-only, no renderer change).
+
+### Increment 12: Drag files onto the file tree
+
+Complements increment 11's editor flow: dropping files on the Files panel saves them under their *original* filename (no timestamp rename) — for adding files you'll reference manually by name. Targeting rules:
+
+- Drop on a folder row → that folder.
+- Drop on a file row → the file's parent folder.
+- Drop on the panel body → `assets/` for images, project root for everything else.
+
+A dashed outline highlights the drop target during the drag. Multiple files can be dropped in one gesture, each saved independently so a per-file error doesn't abort the rest. `file-tree.ts` + `main.ts` + a little CSS. Smoke test 25/25.
+
+### Increment 13: Vim visual-mode highlight + iOS keyboard viewport
+
+Two fixes from testing.
+
+**Selection highlight.** Vim's visual-mode selection was tracked internally but never painted — `cm-selectionBackground` had nothing to attach to. Fix: add CodeMirror's `drawSelection()` to the extension list.
+
+**Keyboard viewport.** When the on-screen keyboard appears (e.g. typing `:` in vim command mode) iOS shrinks the visual viewport; `dvh` alone is unreliable across Safari versions. Added a `visualViewport` resize listener that pins `#app`'s pixel height to `window.visualViewport.height` — a harder guarantee that the toolbar stays on-screen.
+
+Smoke test 25/25.
+
+### Increment 14: App chrome palette aligned with the icon
+
+Cosmetic pass bringing the app's light/dark chrome into line with the icon palette (sky `#B8D6EE` · sand `#F0D5B5` · charcoal `#3a4a52`).
+
+- Light mode: accent navy → charcoal `#3a4a52`; toolbar plain white → sky-blue wash `#daeaf5`; neutral greys → cool blue-tinted variants.
+- Dark mode: pure-grey backgrounds → charcoal-blue; accent orange → sky blue `#8fc5df`.
+- Editor (CodeMirror): background / gutter / active-line / selection colours updated to match.
+
+`editor.ts` + `styles.css`. Smoke test 25/25.
+
+### Increment 15: slipway-demo seed template replaces imago-workshop
+
+The first-run seed was the real Imago workshop deck — production content tied to a specific project. Replaced with `slipway-demo`, a showcase deck designed to demonstrate every feature the app supports: editor shortcuts and file management, inline formatting and in-slide headings, incremental lists and fragments, two/three-column layouts, syntax-highlighted code and KaTeX math, slide attributes and `{{< include >}}`, citations and the `.bib` workflow.
+
+- `assets/theme.scss` — clean Slipway-palette SCSS (sky/sand/charcoal), a system font stack (works offline, no Google Fonts dependency), blockquote / code / table styling.
+- `_snippet.md` — a small include file demonstrating `{{< include >}}`; named `.md` (not `.qmd`) so `listQmds()` doesn't surface it ahead of `slide.qmd` on first launch.
+- `seed.ts` simplified — no PNG fetch, all text files inlined via `?raw`.
+- `smoke.test.ts`: primary suite retargeted at `slipway-demo`; the imago-workshop deck kept as a secondary suite for PNG-inlining + external-URL assertions.
+
+Smoke test 25/25.
+
+### Increment 16: Insert-image button moved into the Files panel
+
+Small UX correction following increment 11: the "Insert image…" button conceptually belongs with file operations, not document operations. It now sits next to "+ File" / "+ Folder" in the file-tree toolbar, styled to match; the hidden `<input type="file">` is owned by the file tree and `onImageFile` joins `FileTreeCallbacks` so `main.ts` keeps the save/insert logic. Toolbar and `LayoutHandle` shed the now-unused button.
+
+### Increment 17: Presentation UI slide in the demo deck
+
+Content-only addition to `slide.qmd`: a slide documenting the `controls` / `progress` / `slide-number` YAML knobs, noting the hamburger menu plugin isn't built in yet, and listing the always-available reveal.js keyboard shortcuts (`F` / `Esc` / `S` / `?`).
+
+### Increment 18: Slide navigation fix — sandbox storage/history polyfill
+
+Navigation stalled after the last fragment on a slide fired. Root cause: the preview iframe runs `sandbox="allow-scripts allow-popups"` (no `allow-same-origin`), giving it a *null* origin. Accessing `localStorage` / `sessionStorage` or calling `history.replaceState` from a null origin throws `SecurityError`. reveal.js's notes plugin reads `localStorage` on every keydown; the uncaught throw killed the Reveal keyboard handler.
+
+Fix: a small synchronous polyfill (`slipway:sandbox-compat`) injected right after `<body>` opens, before any reveal.js code loads. It detects storage-access failures and swaps in lightweight in-memory `localStorage` / `sessionStorage` fallbacks, and wraps `history.replaceState` / `pushState` in try-catch so null-origin `SecurityError`s are silent. Present mode (blob URL, no sandbox) is unaffected. New smoke assertion: the polyfill must appear before the inlined reveal.js bundle.
+
+### Increment 19: Service worker for full offline support (PWA)
+
+The plane-friendly goal from `SPEC.md`. Uses `vite-plugin-pwa` (Workbox `generateSW` strategy) to precache the entire build output on install — including the ~56 MB `pandoc.wasm` (Workbox's per-file size cap raised to 100 MB so the wasm isn't silently dropped from the precache manifest).
+
+- `vite.config.ts`: `VitePWA` plugin; `manifest: false` keeps the hand-crafted `public/manifest.webmanifest`; `navigateFallback` → `index.html`.
+- `main.ts`: `registerSW()` after layout mounts; `onOfflineReady` reports cache completion.
+- `vite-env.d.ts`: references `vite-plugin-pwa/client` for the `virtual:pwa-register` types.
+
+First load installs the SW in the background and caches every asset (JS, CSS, WASM, images); subsequent visits — including with no network — serve entirely from cache. Present mode's blob URL is unaffected.
+
+### Increment 20: Offline-readiness indicator in the toolbar
+
+Replaces increment 19's ephemeral "Ready to work offline" status text with a permanent toolbar signal — a plane icon (✈) to the left of the status text. Grey with a red diagonal slash while the SW is installing / still caching; green once all assets (including `pandoc.wasm`) are precached. The `title` attribute carries a one-line explanation. State driven by `registerSW`'s `onOfflineReady` callback.
+
+### Increment 21: Rendered presentation included in the export zip
+
+`exportZip()` now takes an optional `renderedHtml` string. When the deck has been rendered at least once, the export zip carries a `rendered/index.html` entry alongside the source files — fully self-contained (all assets inlined), opens directly in any browser with no server. The status bar confirms it ("Exported (… + rendered/index.html)"); decks never rendered export source-only as before.
+
+### Increment 22: Inline KaTeX for offline math
+
+Closes the last hole in the offline story. With `html-math-method=katex`, pandoc emits two `cdn.jsdelivr.net/npm/katex@latest/...` tags — broken offline and floating on `@latest` resolution.
+
+- New `katexInlinePlugin()` in `vite.config.ts` builds a `virtual:katex-inlined` module at build time, exporting `katex.min.js` verbatim and `katex.min.css` with all 20 woff2 fonts replaced by data URIs (so they resolve in the null-origin `srcdoc` iframe); woff/ttf fallback entries stripped since woff2 is universal.
+- New `inlineKatexAssets()` in `inline-assets.ts` swaps both CDN tags for inline `<script>` / `<style>` — a third post-pandoc pass in `render.ts`, between reveal.js inlining and theme inlining.
+
+Smoke test: the "no external CDN refs" assertion now covers KaTeX, plus two new assertions check the inlined markers are present and no `url(fonts/KaTeX_*)` strings survive in the rendered HTML.
+
+### Increment 23: Service-worker update notification
+
+Switches `registerType` from `autoUpdate` to `prompt` so a waiting service worker raises `onNeedRefresh` instead of swapping itself silently with no user signal. An amber "↻ Update ready" button appears in the toolbar when an update is waiting; clicking it calls `updateSW(true)` (skipWaiting + reload) and shows "Reloading…" while the reload is in flight. The button is hidden until needed. Independent of the green/grey plane indicator from increment 20 — the two signals (offline ready, update available) are separate.
+
+### Increment 24: Offline indicator fixed on PWA relaunch
+
+`onOfflineReady` only fires the first time the SW installs. On every later page load — including every launch of the installed iPad PWA — the SW already controls the page, the callback never fires, and the plane indicator stayed grey-and-crossed despite the app being fully cached and working offline. Fix: check `navigator.serviceWorker.controller` synchronously at startup; if it's non-null a SW is already in control and the precache is populated, so the indicator goes green immediately. `onOfflineReady` still handles the genuine first-install case.
+
+### Increment 25: Repo cleanup
+
+Housekeeping at a natural stopping point — clearing the deferred list below and catching documentation up to the code.
+
+- **Removed `phase0/`.** The Phase 0 validation prototype was fully superseded by `app/` and the smoke test; it lives on in git history (`7d27dae`, `d9e1cbc`).
+- **Relocated the imago-workshop deck** from `app/src/templates/imago-workshop/` to `app/test/fixtures/imago-workshop/`. It stopped being a template when `slipway-demo` became the seed (increment 15) — it is now purely a smoke-test fixture (PNG inlining + external-URL coverage the demo deck doesn't exercise), and `src/templates/` shouldn't imply otherwise. `smoke.test.ts`'s one path constant updated; no app code referenced it (`seed.ts` imports `slipway-demo` explicitly, so the fixture was never bundled into `dist`).
+- **Backfilled this log.** Increments 10–24 above were shipped but never written up; reconstructed from commit messages.
+- **Refreshed `CLAUDE.md` and the deferred list below** — corrected the layout tree (seed deck is `slipway-demo`; fixture moved) and dropped the now-done items (`phase0/` removal; KaTeX inlining, done in increment 22).
+
+No code or behaviour change beyond the test's fixture path. Smoke test 27/27.
+
 -----
 
 ## Repo cleanup (deferred)
 
-Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping.
+Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)
 
-- **Remove `phase0/`.** The Phase 0 prototype lives in git history; the directory is reference material that's been superseded by `app/` and the smoke test. Delete once we've validated Phase 2 is stable end-to-end.
 - **Fix Dockview light/dark theme cascade** (the increment 2 cosmetic gap). Drive the dock theme from the same CSS variables as the toolbar instead of `prefers-color-scheme` on the dock host.
-- **Inline KaTeX too.** Currently still loaded from jsdelivr. Workshop deck has no math so it's not blocking, but the offline story isn't complete without it. Trickier than reveal.js because KaTeX's CSS references font files via relative `@font-face` URLs, which would need data-URI'ing.
-- **Migrate `imago.scss` off `darken()`/`lighten()`.** Both are deprecated in Dart Sass; output is correct today but each render emits warnings.
-- **Clean up `test/` directory naming** if we add more test types (right now it's just `smoke.test.ts`; if we add unit tests, organise into `test/unit/` and `test/smoke/`).
+- **Migrate `imago.scss` off `darken()`/`lighten()`.** Both are deprecated in Dart Sass; output is correct today but each render emits warnings. The file now lives in `test/fixtures/imago-workshop/` — a frozen test fixture, so low urgency, but the warnings still surface in test output.
+- **Clean up `test/` directory naming** if we add more test types (right now it's `smoke.test.ts` plus `fixtures/`; if unit tests grow, organise into `test/unit/` and `test/smoke/`).
+- **PHASES.md increment ordering.** The increment 5e–9 blocks sit in the file in descending order (9, 8, 7, 6, 5e) rather than ship order, which works against CLAUDE.md's "read bottom-up for most recent" guidance. Increments 10+ are appended in ascending ship order; reordering the older batch to match is a deferred tidy-up.
 
 -----
 

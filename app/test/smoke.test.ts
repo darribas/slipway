@@ -1,11 +1,13 @@
-// Smoke tests for the render pipeline, run against the bundled templates.
+// Smoke tests for the render pipeline.
 //
-// Primary suite: the slipway-demo template (the app's default seed deck).
-// It exercises SCSS compilation, citations, incremental lists, two-column
-// layouts, math, code blocks, and reveal.js config override — enough to
-// catch any regression in the render pipeline before it reaches main.
+// Primary suite: the slipway-demo template (the app's default seed deck,
+// bundled into the app). It exercises SCSS compilation, citations,
+// incremental lists, two-column layouts, math, code blocks, and reveal.js
+// config override — enough to catch any regression in the render pipeline
+// before it reaches main.
 //
-// The imago-workshop template is kept for a secondary round of assertions
+// The imago-workshop deck under test/fixtures/ is a test-only fixture
+// (not shipped with the app) kept for a secondary round of assertions
 // that cover features the demo deck doesn't (local PNG inlining, external
 // URLs left intact, Imago-specific class names).
 
@@ -23,7 +25,7 @@ import type { PandocInstance, RenderInputs } from "../src/core/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEMO    = resolve(HERE, "../src/templates/slipway-demo");
-const IMAGO   = resolve(HERE, "../src/templates/imago-workshop");
+const IMAGO   = resolve(HERE, "fixtures/imago-workshop");
 
 async function loadDemoInputs(): Promise<RenderInputs> {
   const [qmd, scss, bib] = await Promise.all([
@@ -159,7 +161,7 @@ describe("slipway-demo deck", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Secondary suite — imago-workshop template (extra pipeline coverage)
+// Secondary suite — imago-workshop fixture (extra pipeline coverage)
 // ---------------------------------------------------------------------------
 
 describe("imago-workshop deck (pipeline regression)", () => {
