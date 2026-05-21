@@ -76,6 +76,11 @@ async function main(): Promise<void> {
   // onOfflineReady  — first install complete; all assets cached → green plane.
   // onNeedRefresh   — a new SW version is waiting to activate → amber button.
   //                   Calling updateSW(true) triggers skipWaiting + reload.
+  //
+  // onOfflineReady only fires on the very first install. On every subsequent
+  // visit (including every PWA launch from the Home Screen) the SW is already
+  // controlling the page when it loads, so the callback is never called. We
+  // check navigator.serviceWorker.controller at startup to cover that case.
   const updateSW = registerSW({
     onOfflineReady() {
       layout.setOfflineReady(true);
@@ -84,6 +89,10 @@ async function main(): Promise<void> {
       layout.showUpdateReady(() => void updateSW(true));
     },
   });
+
+  if (navigator.serviceWorker?.controller) {
+    layout.setOfflineReady(true);
+  }
 
   layout.setStatus("Seeding project…");
   let wasSeeded = false;
