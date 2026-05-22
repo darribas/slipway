@@ -551,6 +551,16 @@ Two toolbar tweaks from user testing.
 
 Editor/UI-only; smoke test 27/27. The toggle's live behaviour wants a quick check on device.
 
+### Planned — Export PDF
+
+A dedicated "Export PDF" button (sitting next to Export) is the remaining Phase 3 deliverable from this round of user testing. Investigation notes, so the groundwork isn't re-derived:
+
+- reveal.js 5.2 paginates a deck for print when it's initialized with `view: "print"`; the `?print-pdf` URL query just sets that option. Our deck runs from a `srcdoc` / blob with no URL, so `view: "print"` has to be injected into the deck's `Reveal.initialize({…})` call as a post-pandoc pass, alongside the existing reveal / KaTeX / theme inliners.
+- reveal's print stylesheet ships only as SCSS (`reveal.js/css/print/pdf.scss`). It must be compiled — Dart Sass is already in-browser — and inlined into a print variant of the rendered HTML.
+- The button renders that print variant, opens it in a new tab, and calls `window.print()` so Safari's sheet offers "Save as PDF".
+
+Moderate-sized increment; needs verifying on the iPad, since the print dialog can't be exercised in the headless sandbox.
+
 -----
 
 ## Repo cleanup (deferred)
