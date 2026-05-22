@@ -13,11 +13,14 @@ export interface LayoutHandle {
   importInput: HTMLInputElement;
   exportBtn: HTMLButtonElement;
   presentBtn: HTMLButtonElement;
+  vimBtn: HTMLButtonElement;
   status: HTMLSpanElement;
   setStale: (stale: boolean) => void;
   setStatus: (text: string, kind?: "info" | "warn" | "error" | "ok") => void;
   /** Update the persistent offline-readiness indicator in the toolbar. */
   setOfflineReady: (ready: boolean) => void;
+  /** Update the vim on/off toggle's visual state + tooltip. */
+  setVimOn: (on: boolean) => void;
   /**
    * Show the update-ready button. `onAccept` is called when the user clicks
    * it; the caller should trigger a SW skip-waiting + page reload there.
@@ -45,7 +48,8 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   toolbar.appendChild(presentBtn);
 
   const importLabel = el("label", "file-input") as HTMLLabelElement;
-  importLabel.textContent = "Import zip…";
+  importLabel.textContent = "Import";
+  importLabel.title = "Import a project from a .zip file";
   const importInput = el("input") as HTMLInputElement;
   importInput.type = "file";
   importInput.accept = ".zip,application/zip";
@@ -53,7 +57,7 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   toolbar.appendChild(importLabel);
 
   const exportBtn = el("button") as HTMLButtonElement;
-  exportBtn.textContent = "Export zip";
+  exportBtn.textContent = "Export";
   exportBtn.title = "Download the project as a .zip";
   toolbar.appendChild(exportBtn);
 
@@ -64,6 +68,10 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   updateBtn.title = "A new version is available — click to reload";
   updateBtn.hidden = true;
   toolbar.appendChild(updateBtn);
+
+  const vimBtn = el("button", "vim-toggle") as HTMLButtonElement;
+  vimBtn.textContent = "V";
+  toolbar.appendChild(vimBtn);
 
   const offlineIndicator = el("span", "offline-indicator") as HTMLSpanElement;
   offlineIndicator.textContent = "✈";
@@ -90,6 +98,7 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
     importInput,
     exportBtn,
     presentBtn,
+    vimBtn,
     status,
     setStale: (stale) => {
       renderBtn.dataset.stale = stale ? "true" : "false";
@@ -103,6 +112,12 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
       offlineIndicator.title = ready
         ? "App is cached and works offline"
         : "Offline mode not yet ready — stay connected while assets cache";
+    },
+    setVimOn: (on) => {
+      vimBtn.dataset.on = on ? "true" : "false";
+      vimBtn.title = on
+        ? "Vim bindings on — tap to switch off"
+        : "Vim bindings off — tap to switch on";
     },
     showUpdateReady: (onAccept) => {
       updateBtn.hidden = false;

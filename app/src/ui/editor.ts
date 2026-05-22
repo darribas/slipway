@@ -1,4 +1,4 @@
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, Compartment, type Extension } from "@codemirror/state";
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, drawSelection } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { yaml as yamlLang } from "@codemirror/lang-yaml";
@@ -41,6 +41,8 @@ export interface EditorHandle {
   focus: () => void;
   /** Insert `![](path)` on its own line at the current cursor position. */
   insertImageMarkdown: (path: string) => void;
+  /** Enable or disable vim bindings live, without rebuilding the editor. */
+  setVim: (on: boolean) => void;
 }
 
 export interface EditorOptions {
@@ -57,6 +59,8 @@ export interface EditorOptions {
   onRender?: () => void; // Cmd/Ctrl-R
   /** Called when the user pastes or drops an image file into the editor. */
   onImageFile?: (file: File | Blob) => void;
+  /** Start with vim bindings on. Defaults to true; toggle later via setVim(). */
+  vimEnabled?: boolean;
 }
 
 export function createEditor(opts: EditorOptions): EditorHandle {
@@ -79,12 +83,16 @@ export function createEditor(opts: EditorOptions): EditorHandle {
   // OS appearance. Snapshot at construction; a reload picks up theme flips.
   const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
+  // Vim lives in a compartment so it can be toggled live — see setVim() on
+  // the returned handle. Default on; main.ts feeds the persisted preference.
+  const vimCompartment = new Compartment();
+
   const extensions: Extension[] = [
     // Vim must come first so its keymap binds before the standard ones —
     // this lets normal-mode bindings (hjkl, :, etc.) take precedence.
     // Cmd/Ctrl shortcuts still reach our keymap.of() below because vim only
     // intercepts non-modifier keystrokes.
-    vim(),
+    vimCompartment.of((opts.vimEnabled ?? true) ? vim() : []),
     history(),
     drawSelection(),
     lineNumbers(),
@@ -207,5 +215,8 @@ export function createEditor(opts: EditorOptions): EditorHandle {
     },
     focus: () => view.focus(),
     insertImageMarkdown,
+    setVim: (on) => {
+      view.dispatch({ effects: vimCompartment.reconfigure(on ? vim() : []) });
+    },
   };
 }
