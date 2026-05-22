@@ -243,7 +243,7 @@ Reported during testing, queued for individual increments. Tick off as they ship
 - ✓ **[5e]** Renderer ignored the YAML's `theme:` declaration and just globbed for the first `.scss`. The seed deck declared `theme: ../assets/imago.scss` but the renderer never read that — it accidentally worked because there was only one `.scss` in the project. Fragile if multiple stylesheets exist or one gets renamed. Fixed by `resolveDeclaredPath` (see increment 5e below).
 - ✓ **[7a]** iPad PWA viewport overflow — toolbar scrolled off-screen when editor scrolled to bottom. See increment 7.
 - ✓ **[7b]** YAML `format.revealjs.*` options (notably booleans like `controls: false`) silently ignored. See increment 7.
-- [ ] **[wish-1]** A subtle UI affordance to toggle vim bindings on/off (e.g., a tiny status-bar icon). Spec said "vim always-on" but live testing surfaces cases where switching off would help.
+- ✓ **[wish-1]** A subtle UI affordance to toggle vim bindings on/off — shipped in increment 29 as a circled-"V" toggle in the toolbar.
 - ✓ **[wish-2]** Offline-readiness indicator in the chrome — a small plane icon that goes green when everything's cached locally. Shipped across Phase 3 increments 19 / 20 / 24.
 
 ### Increment 4.1: File-tree actions always visible
@@ -536,6 +536,20 @@ Fix:
 - `main.ts`: the Dockview re-layout is now driven by a `ResizeObserver` on the pane host instead of the `window` `resize` event — `window` doesn't fire when only `#app`'s inline height changes, so the dock used to go stale-sized whenever the keyboard opened.
 
 Editor/shell-only; smoke test 27/27. Still needs confirming on the iPad.
+
+### Increment 29: Vim on/off toggle + shorter Import/Export labels
+
+Two toolbar tweaks from user testing.
+
+**Vim toggle (closes `wish-1`).** The spec said vim is always-on, but on a phone it's worth switching off. A circled "V" button now sits left of the offline-readiness plane: tinted green when vim is on, muted with a red slash when off — the same visual language as the plane.
+
+- `editor.ts`: the `vim()` extension moves into a CodeMirror `Compartment`, and the editor handle gains `setVim(on)`, which dispatches a `reconfigure` effect — so toggling is live, with no editor rebuild or page reload. A new `EditorOptions.vimEnabled` seeds the initial state.
+- `main.ts`: the preference is read from / written to `localStorage` (`slipway:vim`), defaulting on. Toggling updates every open editor tab and the button in one go.
+- `layout.ts` / `styles.css`: the `.vim-toggle` button and its on/off styling (a `data-on` attribute drives the colour + slash, mirroring the offline indicator).
+
+**Import / Export labels.** "Import zip…" → "Import" and "Export zip" → "Export"; the ".zip" detail moves to the buttons' `title` tooltips.
+
+Editor/UI-only; smoke test 27/27. The toggle's live behaviour wants a quick check on device.
 
 -----
 

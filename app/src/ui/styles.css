@@ -177,6 +177,41 @@ html, body {
   pointer-events: none;
 }
 
+/* Vim on/off toggle — a circled "V" left of the offline indicator. Mirrors
+   the plane's language: tinted when on, muted with a red slash when off. */
+.slipway-toolbar button.vim-toggle {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  position: relative;
+}
+.slipway-toolbar button.vim-toggle[data-on="true"] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.slipway-toolbar button.vim-toggle[data-on="false"] {
+  color: var(--fg-muted);
+}
+.slipway-toolbar button.vim-toggle[data-on="false"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px),
+    var(--error) calc(50% - 1px),
+    var(--error) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 .slipway-toolbar .status {
   color: var(--fg-muted);
   font-size: 12px;
