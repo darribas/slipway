@@ -3,6 +3,14 @@
 //
 // Compiled by Dart Sass and layered on top of reveal.js's white base theme.
 // Edit freely — Render re-compiles on every run.
+//
+// Quarto compatibility: the /*-- scss:defaults --*/ and /*-- scss:rules --*/
+// markers below split this file into the layers real Quarto expects when used
+// as a reveal.js theme. Slipway's Sass compiler treats them as plain CSS
+// comments, so they're a no-op here; if you delete them this file no longer
+// renders under `quarto render`. Keep at least one of each layer.
+
+/*-- scss:defaults --*/
 
 $sky:      #B8D6EE;
 $sand:     #F0D5B5;
@@ -11,6 +19,8 @@ $dark:     #1c2428;
 $body:     #2c2c2c;
 $muted:    #5c6e78;
 $link:     #3a7fa5;
+
+/*-- scss:rules --*/
 
 // --- Typography (system font — works offline) ---
 

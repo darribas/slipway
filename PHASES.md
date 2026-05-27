@@ -600,6 +600,24 @@ Wiring:
 
 The existing `title`-tooltip path stays (cheap, occasionally useful on desktop hover). Smoke test still 31/31 — no render-pipeline change.
 
+### Increment 32: Quarto round-trip — seed theme.scss carries layer markers
+
+A user exporting a Slipway project and running `quarto render slide.qmd` locally hit a hard error:
+
+```
+ERROR: The file assets/theme.scss doesn't contain at least one layer boundary
+(/*-- scss:defaults --*/, /*-- scss:rules --*/, /*-- scss:mixins --*/,
+ /*-- scss:functions --*/, or /*-- scss:uses --*/)
+```
+
+Quarto's reveal.js theme pipeline refuses any SCSS that doesn't declare the layer it should be merged into. Slipway uses Dart Sass to compile the file standalone and never needed these markers, but their absence blocks round-tripping a project between Slipway and a real Quarto install.
+
+Fix: the seeded `theme.scss` now wraps the variable block under `/*-- scss:defaults --*/` and the rules under `/*-- scss:rules --*/`. Dart Sass treats both as plain CSS comments, so Slipway's compiled output is unchanged — the smoke suite's "compiles to expected hex codes" assertion still passes. A header comment in the file explains what the markers are for so a user editing the theme inside Slipway doesn't strip them by accident. New smoke assertion locks both markers in: 32 tests.
+
+This gets the round-trip "renders without erroring" — not visual parity. Quarto's theme system layers user defaults on top of its own `$body-color` / `$presentation-*` cascade, while Slipway compiles the SCSS verbatim, so the same source can produce visually different decks under each tool. Closing that gap would mean overriding Quarto's reveal vars from the defaults layer and seeding the same vars on the Slipway side before compile — a much bigger change, deferred until / unless users ask for it.
+
+Other Quarto-native bits in the demo (`title-slide-attributes`, `format.revealjs.*`, `{{< include _snippet.md >}}`, `bibliography:`, `assets/` paths) were already valid in both tools, so no other source edits were needed for the basic round-trip to work.
+
 -----
 
 ## Repo cleanup (deferred)

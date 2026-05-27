@@ -81,6 +81,17 @@ describe("slipway-demo deck", () => {
     expect(html.toLowerCase()).toContain("#b8d6ee"); // sky from theme.scss
   }, 30_000);
 
+  test("seed theme.scss carries Quarto layer markers (round-trip compatibility)", async () => {
+    // Real Quarto refuses any reveal.js theme SCSS without at least one layer
+    // boundary (/*-- scss:defaults --*/, /*-- scss:rules --*/, etc.). Dart Sass
+    // treats these as plain CSS comments so Slipway's render is unaffected, but
+    // their presence is what lets a user `quarto render` an exported Slipway
+    // project unchanged.
+    const scss = await readFile(resolve(DEMO, "theme.scss"), "utf8");
+    expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
+    expect(scss).toMatch(/\/\*--\s*scss:rules\s*--\*\//);
+  });
+
   test("accepts a pre-compiled .css stylesheet as-is", async () => {
     const inputs: RenderInputs = {
       qmd: "---\ntitle: CSS probe\n---\n\n# Hi\n",
