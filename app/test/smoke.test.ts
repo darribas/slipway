@@ -29,10 +29,11 @@ const DEMO    = resolve(HERE, "../src/templates/slipway-demo");
 const IMAGO   = resolve(HERE, "fixtures/imago-workshop");
 
 async function loadDemoInputs(): Promise<RenderInputs> {
-  const [qmd, scss, bib] = await Promise.all([
+  const [qmd, scss, bib, snippet] = await Promise.all([
     readFile(resolve(DEMO, "slide.qmd"),       "utf8"),
     readFile(resolve(DEMO, "theme.scss"),       "utf8"),
     readFile(resolve(DEMO, "references.bib"),   "utf8"),
+    readFile(resolve(DEMO, "_snippet.qmd"),     "utf8"),
   ]);
   return {
     qmd,
@@ -40,6 +41,7 @@ async function loadDemoInputs(): Promise<RenderInputs> {
     stylesheetIsPrecompiled: false,
     bib,
     assets: new Map(),
+    includes: new Map([["_snippet.qmd", snippet]]),
   };
 }
 
@@ -56,6 +58,7 @@ async function loadImagoInputs(): Promise<RenderInputs> {
     stylesheetIsPrecompiled: false,
     bib,
     assets: new Map([["attention_paper.png", new Uint8Array(png)]]),
+    includes: new Map(),
   };
 }
 
@@ -81,6 +84,15 @@ describe("slipway-demo deck", () => {
     expect(html.toLowerCase()).toContain("#b8d6ee"); // sky from theme.scss
   }, 30_000);
 
+  test("{{< include _snippet.qmd >}} expands inline into the rendered deck", async () => {
+    // Regression guard for a Phase 1 latent bug: expandIncludes() existed but
+    // buildRenderInputs never populated the includes map, so the demo's
+    // include shortcode silently rendered as an invisible HTML comment.
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    expect(html).toContain("was included from");
+    expect(html).not.toMatch(/include\s+_snippet\.qmd\s+not\s+found/);
+  }, 30_000);
+
   test("seed theme.scss carries Quarto layer markers (round-trip compatibility)", async () => {
     // Real Quarto refuses any reveal.js theme SCSS without at least one layer
     // boundary (/*-- scss:defaults --*/, /*-- scss:rules --*/, etc.). Dart Sass
@@ -99,6 +111,7 @@ describe("slipway-demo deck", () => {
       stylesheetIsPrecompiled: true,
       bib: null,
       assets: new Map(),
+      includes: new Map(),
     };
     const { html } = await renderDeck(pandoc, inputs);
     expect(html).toContain('data-from="theme.css"');
@@ -316,6 +329,7 @@ describe("synthetic feature probes", () => {
       stylesheetIsPrecompiled: false,
       bib: null,
       assets: new Map(),
+      includes: new Map(),
     };
     const { html } = await renderDeck(pandoc, inputs);
     expect(html).toMatch(/class="[^"]*\bnotes\b/);

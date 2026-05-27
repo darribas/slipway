@@ -13,6 +13,11 @@ export interface RenderInputs {
   stylesheetIsPrecompiled: boolean; // true for .css, false for .scss
   bib: string | null; // raw BibTeX (may be null)
   assets: Map<string, Uint8Array>; // basename -> bytes (PNGs, JPGs, etc.)
+  // Files available for {{< include path >}} resolution. Keyed by both the
+  // project-relative path and the basename so the shortcode's argument can be
+  // either form (preprocess.ts's expandIncludes tries basename first, then
+  // path). Empty when the project has no .qmd/.md siblings to include.
+  includes: Map<string, string>;
 }
 
 export interface RenderResult {
