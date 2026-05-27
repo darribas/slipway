@@ -253,7 +253,7 @@ format:
 
 ## {{< include >}} shortcode
 
-{{< include _snippet.md >}}
+{{< include _snippet.qmd >}}
 
 The content above is pulled from `_snippet.qmd` at render time — Slipway
 preprocesses `{{< include >}}` before handing off to Pandoc.

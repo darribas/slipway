@@ -53,7 +53,7 @@ export async function renderDeck(
     }
   }
 
-  const { qmd } = preprocessDeck(inputs.qmd, { assetUris });
+  const { qmd } = preprocessDeck(inputs.qmd, { assetUris, includes: inputs.includes });
 
   const pandocFiles: Record<string, string | Blob> = {};
   if (css) pandocFiles["theme.css"] = css;

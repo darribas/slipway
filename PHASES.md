@@ -618,6 +618,27 @@ This gets the round-trip "renders without erroring" — not visual parity. Quart
 
 Other Quarto-native bits in the demo (`title-slide-attributes`, `format.revealjs.*`, `{{< include _snippet.md >}}`, `bibliography:`, `assets/` paths) were already valid in both tools, so no other source edits were needed for the basic round-trip to work.
 
+### Increment 33: `{{< include >}}` — Quarto warning + latent Slipway no-op
+
+User-tested the increment-32 round-trip in real Quarto and reported one remaining warning:
+
+```
+WARNING (/opt/quarto/share/filters/main.lua:21973) Shortcode 'include' not found
+```
+
+Two distinct problems shared the same surface:
+
+1. **Quarto side.** Quarto's `include` shortcode runs as a pre-processor and only accepts `.qmd` files. The seeded snippet was `_snippet.md`, so Quarto's pre-processor skipped it, the shortcode survived into the Lua filter pass, and the filter chain warned. Fix: rename `_snippet.md` → `_snippet.qmd` in the demo template + update the reference in `slide.qmd` + update `seed.ts`.
+
+2. **Slipway side, latent since Phase 1.** `preprocess.ts`'s `expandIncludes()` was implemented to look up a basename in a map, but `RenderInputs` had no `includes` field, `buildRenderInputs()` never built such a map, and `render.ts` called `preprocessDeck(qmd, { assetUris })` with no `includes`. Every shortcode in every deck was silently replaced with `<!-- include … not found -->` (an invisible HTML comment), so the demo's "include shortcode" slide had been rendering only its heading + explainer paragraph — not the snippet content — since the demo deck shipped. No smoke test caught it. Fix:
+
+   - `types.ts`: `RenderInputs` gains a required `includes: Map<string, string>` field, matching the `assets` pattern (always present, empty when irrelevant).
+   - `project.ts`: `buildRenderInputs()` collects every `.qmd` / `.md` / `.markdown` in the project except the active deck and registers each under both its project-relative path and its basename. Path-key always uniquely resolves; basename-key is first-wins on collisions, matching the existing lookup in `expandIncludes()`.
+   - `render.ts`: `preprocessDeck` call now threads `inputs.includes`.
+   - Smoke test: a new assertion renders the demo deck and confirms the snippet's distinctive phrase appears in the output (and the "not found" comment doesn't). Plus three test-only sites updated to pass empty maps. 33 tests.
+
+Same caveat as the increment-32 fix: existing users with a pre-rename project in IDB still have `_snippet.md` on disk and `{{< include _snippet.md >}}` in their `slide.qmd`. Slipway's basename lookup still finds the file (so the in-app render now works for them too — the wire-up fix alone unblocks them), but exporting and running `quarto render` would still warn. A one-shot migration to rename old seed artifacts is deferred; for now, affected users can clear the project and re-seed, or hand-rename in the Files panel.
+
 -----
 
 ## Repo cleanup (deferred)

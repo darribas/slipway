@@ -6,7 +6,7 @@
 // after the user edits it.
 
 import slideQmd      from "../templates/slipway-demo/slide.qmd?raw";
-import snippetQmd    from "../templates/slipway-demo/_snippet.md?raw";
+import snippetQmd    from "../templates/slipway-demo/_snippet.qmd?raw";
 import themeScss     from "../templates/slipway-demo/theme.scss?raw";
 import referencesBib from "../templates/slipway-demo/references.bib?raw";
 
@@ -18,7 +18,7 @@ export async function seedIfEmpty(): Promise<boolean> {
   if (await exists(SEED_MARKER)) return false;
 
   await writeText("slide.qmd", slideQmd);
-  await writeText("_snippet.md", snippetQmd);
+  await writeText("_snippet.qmd", snippetQmd);
   await writeText("assets/theme.scss", themeScss);
   await writeText("assets/references.bib", referencesBib);
   await writeText(SEED_MARKER, new Date().toISOString());

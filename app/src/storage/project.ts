@@ -108,7 +108,23 @@ export async function buildRenderInputs(qmdPath: string): Promise<RenderInputs> 
     }
   }
 
-  return { qmd, stylesheet, stylesheetIsPrecompiled, bib, assets };
+  // {{< include … >}} candidates: every .qmd / .md in the project except the
+  // deck itself. Keyed by both project path and basename so shortcode args
+  // like `_snippet.qmd` and `includes/_snippet.qmd` both resolve. When two
+  // files share a basename the first one wins on the basename key (the
+  // explicit-path key still uniquely resolves either).
+  const includes = new Map<string, string>();
+  for (const p of all) {
+    const ext = p.split(".").pop()?.toLowerCase() ?? "";
+    if ((ext === "qmd" || ext === "md" || ext === "markdown") && p !== qmdPath) {
+      const text = await readText(p);
+      includes.set(p, text);
+      const basename = p.split("/").pop()!;
+      if (!includes.has(basename)) includes.set(basename, text);
+    }
+  }
+
+  return { qmd, stylesheet, stylesheetIsPrecompiled, bib, assets, includes };
 }
 
 function pickFirst<T>(arr: T[], pred: (v: T) => boolean): T | null {
