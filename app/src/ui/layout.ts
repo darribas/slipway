@@ -64,7 +64,10 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
 
   const pdfBtn = el("button") as HTMLButtonElement;
   pdfBtn.textContent = "Export PDF";
-  pdfBtn.title = "Open the deck in print layout for Safari → Save as PDF";
+  pdfBtn.title =
+    "Open the deck in print layout for Safari → Save as PDF. " +
+    "Tip: turn off 'Show Headers and Footers' in Safari's print sheet " +
+    "to drop the URL + page-count strip.";
   pdfBtn.disabled = true;
   toolbar.appendChild(pdfBtn);
 

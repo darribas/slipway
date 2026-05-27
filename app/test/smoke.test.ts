@@ -344,4 +344,13 @@ describe("buildPrintVariant", () => {
     expect(out.indexOf('data-from="slipway:reveal-print"')).toBeLessThan(lastBody);
     expect(out.indexOf('data-from="slipway:auto-print"')).toBeLessThan(lastBody);
   });
+
+  test("forces landscape orientation via @page", () => {
+    // iOS Safari ignores `@page { size: <px> }` but honors the keyword form;
+    // increment 30.1 prepends an explicit `size: landscape` rule so a 16:9
+    // deck fits one slide per page instead of letterboxing onto portrait A4.
+    const out = buildPrintVariant(baseline);
+    expect(out).toContain('data-from="slipway:print-page"');
+    expect(out).toMatch(/@page\s*\{\s*size:\s*landscape/);
+  });
 });
