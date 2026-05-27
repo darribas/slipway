@@ -66,8 +66,9 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   pdfBtn.textContent = "Export PDF";
   pdfBtn.title =
     "Open the deck in print layout for Safari → Save as PDF. " +
-    "Tip: turn off 'Show Headers and Footers' in Safari's print sheet " +
-    "to drop the URL + page-count strip.";
+    "On iPad: in Safari's print sheet, pick Paper Size = US Letter and " +
+    "Orientation = Landscape for the best fit, and turn off " +
+    "'Show Headers and Footers' to drop the URL strip.";
   pdfBtn.disabled = true;
   toolbar.appendChild(pdfBtn);
 

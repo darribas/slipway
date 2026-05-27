@@ -444,7 +444,7 @@ async function main(): Promise<void> {
   layout.pdfBtn.addEventListener("click", () => {
     if (!lastRenderedHtml) return;
     previewPane.openInNewTab(buildPrintVariant(lastRenderedHtml));
-    layout.setStatus("Print view opened — turn off Headers/Footers for a cleaner PDF", "ok");
+    layout.setStatus("Print view opened — in Safari's sheet, pick US Letter + Landscape", "ok");
   });
 
   layout.setVimOn(vimEnabled);
