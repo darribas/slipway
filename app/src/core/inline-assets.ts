@@ -173,6 +173,57 @@ export function injectSandboxCompat(html: string): string {
 }
 
 /**
+ * Inject `view: "print"` into the deck's Reveal.initialize call so reveal.js
+ * lays the deck out for PDF export — one slide per page, controls hidden,
+ * progress bar removed. This is the config-side equivalent of opening the
+ * deck with `?print-pdf` in the URL (which our srcdoc / blob deck doesn't
+ * have). If pandoc's template ever changes shape and the pattern doesn't
+ * match, the HTML is returned unchanged and the deck renders normally —
+ * still openable in a new tab, just without the print layout.
+ */
+export function injectPrintView(html: string): string {
+  return html.replace(/Reveal\.initialize\(\s*\{/, (m) => `${m}\n  view: "print",`);
+}
+
+/**
+ * Inline reveal's print stylesheet and a small script that opens Safari's
+ * print sheet once the deck has settled. Both go before the LAST </body>
+ * for the same reason injectRevealConfigOverride does — a naive first-match
+ * regex can land inside an inlined plugin script that happens to contain
+ * `</body>` as a literal string.
+ */
+export function inlinePrintAssets(html: string, printCss: string): string {
+  const block = `<style data-from="slipway:reveal-print">
+${printCss}
+</style>
+<script data-from="slipway:auto-print">
+(function () {
+  var done = false;
+  function go() {
+    if (done) return;
+    done = true;
+    // Brief settle so the print layout has finished laying out before the
+    // browser snapshots pages.
+    setTimeout(function () { try { window.print(); } catch (e) {} }, 200);
+  }
+  function wireup() {
+    if (window.Reveal && Reveal.addEventListener) {
+      Reveal.addEventListener('pdf-ready', go);
+      Reveal.addEventListener('ready', go);
+    }
+  }
+  if (document.readyState === 'complete') wireup();
+  else window.addEventListener('load', wireup);
+  // Hard fallback in case neither reveal event fires (older / patched reveal).
+  setTimeout(go, 2000);
+})();
+<\/script>`;
+  const lastBody = html.lastIndexOf("</body>");
+  if (lastBody < 0) return html + block;
+  return html.slice(0, lastBody) + block + "\n" + html.slice(lastBody);
+}
+
+/**
  * Replace every <link>/<script> in `html` that points at one of our known
  * reveal.js CDN URLs with an inline <style>/<script> block. Returns the
  * rewritten HTML; leaves unrecognised external references alone.

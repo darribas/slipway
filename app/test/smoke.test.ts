@@ -19,6 +19,7 @@ import { describe, expect, test } from "vitest";
 import { convert } from "pandoc-wasm";
 
 import { renderDeck } from "../src/core/render";
+import { buildPrintVariant } from "../src/core/print";
 import { extractDeclarations } from "../src/core/frontmatter";
 import { resolveDeclaredPath } from "../src/core/path-resolve";
 import type { PandocInstance, RenderInputs } from "../src/core/types";
@@ -308,4 +309,39 @@ describe("synthetic feature probes", () => {
     const { html } = await renderDeck(pandoc, inputs);
     expect(html).toMatch(/class="[^"]*\bnotes\b/);
   }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
+// Export PDF — print variant transformations
+// ---------------------------------------------------------------------------
+
+describe("buildPrintVariant", () => {
+  const baseline = `<!doctype html><html><head><title>t</title></head><body>
+<div class="reveal"><div class="slides"><section>hi</section></div></div>
+<script>Reveal.initialize({ controls: true, hash: true });</script>
+</body></html>`;
+
+  test("injects view: \"print\" into Reveal.initialize", () => {
+    const out = buildPrintVariant(baseline);
+    expect(out).toContain('view: "print",');
+    // The original option must still be there — we prepend, not replace.
+    expect(out).toContain("controls: true");
+  });
+
+  test("inlines reveal's print stylesheet and the auto-print script", () => {
+    const out = buildPrintVariant(baseline);
+    expect(out).toContain('data-from="slipway:reveal-print"');
+    expect(out).toContain('data-from="slipway:auto-print"');
+    expect(out).toContain("window.print()");
+    // A selector that only the bundled print CSS supplies, so we know the
+    // virtual module's content actually reached the output.
+    expect(out).toContain("reveal-print");
+  });
+
+  test("places the print blocks before the last </body>", () => {
+    const out = buildPrintVariant(baseline);
+    const lastBody = out.lastIndexOf("</body>");
+    expect(out.indexOf('data-from="slipway:reveal-print"')).toBeLessThan(lastBody);
+    expect(out.indexOf('data-from="slipway:auto-print"')).toBeLessThan(lastBody);
+  });
 });

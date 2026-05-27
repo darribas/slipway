@@ -12,6 +12,7 @@ export interface LayoutHandle {
   renderBtn: HTMLButtonElement;
   importInput: HTMLInputElement;
   exportBtn: HTMLButtonElement;
+  pdfBtn: HTMLButtonElement;
   presentBtn: HTMLButtonElement;
   vimBtn: HTMLButtonElement;
   status: HTMLSpanElement;
@@ -61,6 +62,12 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   exportBtn.title = "Download the project as a .zip";
   toolbar.appendChild(exportBtn);
 
+  const pdfBtn = el("button") as HTMLButtonElement;
+  pdfBtn.textContent = "Export PDF";
+  pdfBtn.title = "Open the deck in print layout for Safari → Save as PDF";
+  pdfBtn.disabled = true;
+  toolbar.appendChild(pdfBtn);
+
   toolbar.appendChild(el("span", "spacer"));
 
   const updateBtn = el("button", "update-ready") as HTMLButtonElement;
@@ -97,6 +104,7 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
     renderBtn,
     importInput,
     exportBtn,
+    pdfBtn,
     presentBtn,
     vimBtn,
     status,

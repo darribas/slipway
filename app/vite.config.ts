@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import * as sass from "sass";
 import { defineConfig, type Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
@@ -107,12 +108,38 @@ function katexInlinePlugin(): Plugin {
   };
 }
 
+// Compile reveal.js's print/pdf.scss at build and expose the result as a
+// virtual module. This is the stylesheet that paginates a deck for PDF
+// export — reveal ships it only as SCSS (no compiled .css in dist/), so
+// the render pipeline can't just inline it as ?raw. pdf.scss is standalone
+// (no @import/@use), so a one-time build-side compile is enough.
+function revealPrintCssPlugin(): Plugin {
+  const VIRT_ID = "virtual:reveal-print-css";
+  const RESOLVED = "\0" + VIRT_ID;
+  const scssPath = resolve("node_modules/reveal.js/css/print/pdf.scss");
+  let cached: string | null = null;
+
+  function buildModule(): string {
+    if (cached) return cached;
+    const result = sass.compile(scssPath, { style: "expanded" });
+    cached = `export default ${JSON.stringify(result.css)};\n`;
+    return cached;
+  }
+
+  return {
+    name: "slipway:reveal-print-css",
+    resolveId(id) { return id === VIRT_ID ? RESOLVED : null; },
+    load(id) { return id === RESOLVED ? buildModule() : null; },
+  };
+}
+
 export default defineConfig({
   // Relative base so the built app works at any path (GitHub Pages, /slipway/, etc).
   base: "./",
   plugins: [
     pandocWasmPlugin(),
     katexInlinePlugin(),
+    revealPrintCssPlugin(),
     VitePWA({
       // Service worker is registered by the virtual module imported in main.ts.
       // "prompt" fires onNeedRefresh when a new SW is waiting, giving the app
