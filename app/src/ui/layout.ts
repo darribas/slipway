@@ -23,6 +23,14 @@ export interface LayoutHandle {
   /** Update the vim on/off toggle's visual state + tooltip. */
   setVimOn: (on: boolean) => void;
   /**
+   * Attach a list of detail strings to the status text. When non-empty, the
+   * status becomes tappable (dotted underline + a "›" chevron); tapping
+   * opens a modal that shows the full list and offers Copy-to-clipboard.
+   * Used for render warnings, which are too long to fit in the toolbar and
+   * useful enough to be readable + copyable.
+   */
+  setStatusDetails: (details: string[]) => void;
+  /**
    * Show the update-ready button. `onAccept` is called when the user clicks
    * it; the caller should trigger a SW skip-waiting + page reload there.
    */
@@ -102,6 +110,17 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
   applyDockTheme(paneHost);
   root.appendChild(paneHost);
 
+  // Tap-to-expand details modal for render warnings. Status becomes
+  // visually tappable (data-has-details = "true") whenever the latest
+  // setStatusDetails([…]) call had a non-empty list.
+  let currentDetails: string[] = [];
+  const detailsModal = buildDetailsModal();
+  document.body.appendChild(detailsModal.el);
+  status.addEventListener("click", () => {
+    if (status.dataset.hasDetails !== "true" || currentDetails.length === 0) return;
+    detailsModal.show("Render warnings", currentDetails);
+  });
+
   return {
     toolbar,
     paneHost,
@@ -131,6 +150,15 @@ export function mountLayout(root: HTMLElement): LayoutHandle {
         ? "Vim bindings on — tap to switch off"
         : "Vim bindings off — tap to switch on";
     },
+    setStatusDetails: (details) => {
+      currentDetails = details.slice();
+      if (currentDetails.length > 0) {
+        status.dataset.hasDetails = "true";
+      } else {
+        delete status.dataset.hasDetails;
+        detailsModal.hide();
+      }
+    },
     showUpdateReady: (onAccept) => {
       updateBtn.hidden = false;
       updateBtn.onclick = () => {
@@ -150,6 +178,81 @@ function applyDockTheme(host: HTMLElement): void {
   };
   apply();
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", apply);
+}
+
+/**
+ * Build a hidden floating modal element with a scrollable body, a Copy
+ * button, and click-outside / Escape dismissal. Used by the toolbar's
+ * status text to surface render warnings on demand.
+ */
+function buildDetailsModal(): {
+  el: HTMLElement;
+  show: (title: string, details: string[]) => void;
+  hide: () => void;
+} {
+  const root = document.createElement("div");
+  root.className = "slipway-details-modal";
+  root.hidden = true;
+  root.innerHTML = `
+    <div class="slipway-details-backdrop"></div>
+    <div class="slipway-details-card" role="dialog" aria-modal="true" aria-labelledby="slipway-details-title">
+      <header class="slipway-details-header">
+        <h2 id="slipway-details-title" class="slipway-details-title"></h2>
+        <button class="slipway-details-close" aria-label="Close">×</button>
+      </header>
+      <pre class="slipway-details-body"></pre>
+      <footer class="slipway-details-footer">
+        <button class="slipway-details-copy">Copy</button>
+      </footer>
+    </div>
+  `;
+
+  const titleEl = root.querySelector(".slipway-details-title") as HTMLElement;
+  const bodyEl = root.querySelector(".slipway-details-body") as HTMLElement;
+  const closeBtn = root.querySelector(".slipway-details-close") as HTMLButtonElement;
+  const copyBtn = root.querySelector(".slipway-details-copy") as HTMLButtonElement;
+  const backdrop = root.querySelector(".slipway-details-backdrop") as HTMLElement;
+
+  let currentText = "";
+
+  function hide(): void {
+    root.hidden = true;
+    copyBtn.textContent = "Copy";
+    delete copyBtn.dataset.copied;
+  }
+
+  function show(title: string, details: string[]): void {
+    titleEl.textContent = title;
+    currentText = details.join("\n\n");
+    bodyEl.textContent = currentText;
+    root.hidden = false;
+    copyBtn.textContent = "Copy";
+    delete copyBtn.dataset.copied;
+  }
+
+  closeBtn.addEventListener("click", hide);
+  backdrop.addEventListener("click", hide);
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(currentText);
+      copyBtn.dataset.copied = "true";
+      copyBtn.textContent = "Copied ✓";
+    } catch {
+      // Clipboard API may be unavailable (insecure context, denied
+      // permission). Fall back to selecting the body so the user can
+      // copy manually with the system gesture.
+      const range = document.createRange();
+      range.selectNodeContents(bodyEl);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !root.hidden) hide();
+  });
+
+  return { el: root, show, hide };
 }
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, className?: string): T {

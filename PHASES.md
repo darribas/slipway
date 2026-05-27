@@ -583,6 +583,23 @@ The user found that **Paper Size = US Letter + Orientation = Landscape** in Safa
 
 The fuller fix — bypass reveal's print mode entirely and lay slides out ourselves with viewport-relative CSS, freeing us from the `@page { size }` dance — is deferred to a future increment in case the workaround becomes annoying. UI text only; smoke test still 31/31.
 
+### Increment 31: Tap-to-expand details modal for render warnings
+
+The toolbar's status text shows "(N warnings)" after a render, with the full text in the element's `title` attribute. That's hard to use on iPad — long-press is undiscoverable, the tooltip truncates on small screens, and copying text out of a tooltip isn't really possible.
+
+A render-warnings modal now opens on tap. When the latest render has warnings, the status text picks up `data-has-details="true"`, which styles it as a tappable hint (dotted underline + a "›" chevron + pointer cursor). Tapping pops a centred modal with:
+
+- the warnings in a scrollable `<pre>` block (text-selectable on iPad);
+- a **Copy** button that puts the full list on the clipboard (with a manual selection fallback for environments where `navigator.clipboard.writeText` is unavailable);
+- × button, click-outside, and Escape all dismiss.
+
+Wiring:
+
+- `layout.ts`: a new `buildDetailsModal()` builds the modal DOM and appends it to `document.body` so it sits above `#app` (which has a transform from the keyboard-avoidance fix) and Dockview's z-indexed chrome. `LayoutHandle` grows `setStatusDetails(details)`; non-empty arrays arm the affordance, empty arrays clear it and hide the modal if it's open.
+- `main.ts`: `runRender` calls `setStatusDetails([])` when the render starts and `setStatusDetails(result.warnings)` after it lands, so the chevron tracks the current render's state.
+
+The existing `title`-tooltip path stays (cheap, occasionally useful on desktop hover). Smoke test still 31/31 — no render-pipeline change.
+
 -----
 
 ## Repo cleanup (deferred)
