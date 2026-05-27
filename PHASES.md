@@ -563,6 +563,16 @@ Smoke test gains three assertions on `buildPrintVariant`: it injects `view: "pri
 
 Tested headlessly only — Safari's print dialog can't be exercised in the sandbox; the actual "Save as PDF" round-trip needs iPad verification.
 
+### Increment 30.1: PDF export — force landscape
+
+Device testing of increment 30 confirmed the suspected iOS Safari quirk: it ignores reveal's runtime `@page { size: WIDTHpx HEIGHTpx }` injection, so slides defaulted to whatever paper the print sheet picked (A4 portrait in practice). The result: each 16:9 slide letterboxed as a small rectangle at the top of a portrait page, overflowing into a second page — a ~22-slide deck rendered as 37 pages.
+
+iOS Safari does honor the `landscape` / `portrait` *keyword*, though. `inlinePrintAssets` now prepends an `@page { size: landscape; margin: 0 }` rule before reveal's print CSS. Landscape A4 (297×210mm) fits a default reveal slide (960×700px) comfortably, so most decks now print one slide per page.
+
+The "blob:…" URL and "Page X of Y" strip across the top of each PDF page is Safari's print-dialog "Show Headers and Footers" option — purely a print-sheet preference, nothing we can suppress from CSS. The PDF button's `title` and the on-click status message both surface that as a one-line tip.
+
+Smoke test gains a new assertion that the `@page { size: landscape … }` rule is present in the print variant. 31 tests now.
+
 -----
 
 ## Repo cleanup (deferred)

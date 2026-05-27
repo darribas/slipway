@@ -193,7 +193,17 @@ export function injectPrintView(html: string): string {
  * `</body>` as a literal string.
  */
 export function inlinePrintAssets(html: string, printCss: string): string {
-  const block = `<style data-from="slipway:reveal-print">
+  const block = `<style data-from="slipway:print-page">
+/* Force landscape orientation. iOS Safari ignores the exact dimensions
+   in @page { size: WIDTH HEIGHT }, so reveal.js's runtime page-sizing
+   rule is dropped on the floor and pages default to whatever paper the
+   print dialog picked — typically A4 portrait, which letterboxes a 16:9
+   deck and overflows each slide onto two pages. The landscape / portrait
+   keyword IS honored, and landscape A4 (297×210mm) fits a default reveal
+   slide (960×700px) comfortably — usually one slide per page. */
+@page { size: landscape; margin: 0; }
+</style>
+<style data-from="slipway:reveal-print">
 ${printCss}
 </style>
 <script data-from="slipway:auto-print">
