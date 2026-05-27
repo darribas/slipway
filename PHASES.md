@@ -435,7 +435,7 @@ Fix: a small synchronous polyfill (`slipway:sandbox-compat`) injected right afte
 **Status:** 🚧 in progress
 **Goal (per `SPEC.md`):** service worker + offline, web app manifest, PDF export, presenter view, plugin opt-in (Menu / Search / Chalkboard), KaTeX, templates, app icon.
 
-Several Phase 3 deliverables shipped interleaved with Phase 2 work rather than as a separate push, so the increment numbers here are not contiguous — they're a single global sequence across the project. **Shipped:** the service worker + offline precache, the offline-readiness indicator, the SW update prompt, the PWA manifest + app icon, and inlined KaTeX. **Outstanding:** PDF export, the in-app presenter view, per-deck plugin opt-in (Menu / Search / Chalkboard), and bundled templates beyond `slipway-demo`. Increments 25–26 are cross-cutting repo/doc housekeeping that landed during this phase.
+Several Phase 3 deliverables shipped interleaved with Phase 2 work rather than as a separate push, so the increment numbers here are not contiguous — they're a single global sequence across the project. **Shipped:** the service worker + offline precache, the offline-readiness indicator, the SW update prompt, the PWA manifest + app icon, inlined KaTeX, and PDF export. **Outstanding:** the in-app presenter view, per-deck plugin opt-in (Menu / Search / Chalkboard), and bundled templates beyond `slipway-demo`. Increments 25–26 are cross-cutting repo/doc housekeeping that landed during this phase.
 
 ### Increment 9: App icon + PWA manifest
 
@@ -551,15 +551,17 @@ Two toolbar tweaks from user testing.
 
 Editor/UI-only; smoke test 27/27. The toggle's live behaviour wants a quick check on device.
 
-### Planned — Export PDF
+### Increment 30: Export PDF
 
-A dedicated "Export PDF" button (sitting next to Export) is the remaining Phase 3 deliverable from this round of user testing. Investigation notes, so the groundwork isn't re-derived:
+A dedicated "Export PDF" button right of Export opens the deck in a new tab with reveal's print layout and triggers Safari's print sheet, where the user picks "Save as PDF" / "Save to Files". Three pieces, matching the investigation in the prior commit:
 
-- reveal.js 5.2 paginates a deck for print when it's initialized with `view: "print"`; the `?print-pdf` URL query just sets that option. Our deck runs from a `srcdoc` / blob with no URL, so `view: "print"` has to be injected into the deck's `Reveal.initialize({…})` call as a post-pandoc pass, alongside the existing reveal / KaTeX / theme inliners.
-- reveal's print stylesheet ships only as SCSS (`reveal.js/css/print/pdf.scss`). It must be compiled — Dart Sass is already in-browser — and inlined into a print variant of the rendered HTML.
-- The button renders that print variant, opens it in a new tab, and calls `window.print()` so Safari's sheet offers "Save as PDF".
+- **Force `view: "print"` without a URL query.** reveal.js 5.2 paginates a deck for PDF when initialized with `view: "print"` — the `?print-pdf` URL query just sets that option. Our deck runs from a `srcdoc` / blob URL, so `injectPrintView` in `inline-assets.ts` regex-inserts `view: "print",` as the first key inside the deck's `Reveal.initialize({…})` call (a post-pandoc pass like the existing reveal / KaTeX / theme inliners).
+- **Inline reveal's print stylesheet.** reveal ships `css/print/pdf.scss` as uncompiled SCSS — there's no `dist/…/pdf.css`. A new `revealPrintCssPlugin` in `vite.config.ts` compiles it once at build (the file is standalone, no `@import` / `@use`) and exposes it via `virtual:reveal-print-css`. `inlinePrintAssets` injects the compiled CSS plus a small auto-print script before the last `</body>` — the script listens for reveal's `pdf-ready` / `ready` events with a 2 s `setTimeout` fallback, then calls `window.print()`.
+- **Composer + button.** `core/print.ts` exports `buildPrintVariant(html)` that runs both passes. `layout.ts` adds the `Export PDF` button next to Export (disabled until first render); `main.ts` wires it to open the print variant in a new tab via the same blob-URL mechanism as Present.
 
-Moderate-sized increment; needs verifying on the iPad, since the print dialog can't be exercised in the headless sandbox.
+Smoke test gains three assertions on `buildPrintVariant`: it injects `view: "print"` (without losing existing options), inlines the print-CSS + auto-print markers, and places both blocks before the last `</body>`. 30 tests now passing.
+
+Tested headlessly only — Safari's print dialog can't be exercised in the sandbox; the actual "Save as PDF" round-trip needs iPad verification.
 
 -----
 

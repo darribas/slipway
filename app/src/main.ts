@@ -5,6 +5,7 @@ import { registerSW } from "virtual:pwa-register";
 import { DockviewComponent, type IContentRenderer, type IDockviewPanel } from "dockview-core";
 
 import { mountLayout } from "./ui/layout";
+import { buildPrintVariant } from "./core/print";
 import { createEditor, languageFor, type EditorHandle } from "./ui/editor";
 import { PreviewPane } from "./ui/preview";
 import { createFileTree } from "./ui/file-tree";
@@ -440,6 +441,11 @@ async function main(): Promise<void> {
     if (lastRenderedHtml) previewPane.openInNewTab(lastRenderedHtml);
   });
 
+  layout.pdfBtn.addEventListener("click", () => {
+    if (!lastRenderedHtml) return;
+    previewPane.openInNewTab(buildPrintVariant(lastRenderedHtml));
+  });
+
   layout.setVimOn(vimEnabled);
   layout.vimBtn.addEventListener("click", () => {
     vimEnabled = !vimEnabled;
@@ -476,6 +482,7 @@ async function main(): Promise<void> {
       previewPane.render(result.html);
       lastRenderedHtml = result.html;
       layout.presentBtn.disabled = false;
+      layout.pdfBtn.disabled = false;
       layout.setStale(false);
       const warn = result.warnings.length ? ` (${result.warnings.length} warnings)` : "";
       layout.setStatus(`Rendered in ${Math.round(result.durationMs)}ms${warn}`, "ok");
