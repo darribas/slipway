@@ -573,6 +573,33 @@ The "blob:…" URL and "Page X of Y" strip across the top of each PDF page is Sa
 
 Smoke test gains a new assertion that the `@page { size: landscape … }` rule is present in the print variant. 31 tests now.
 
+### Increment 30.2: PDF export — iPad workaround documented
+
+Increment 30.1's `@page { size: landscape; margin: 0 }` rule turned out to be a no-op on iOS Safari (which ignores `@page` size/orientation entirely), and tapping the print sheet's Landscape button while it was in place produced *worse* output — 74 pages from a 22-slide deck — because reveal's own px-based `@page` rule and ours were getting tangled.
+
+Grepping reveal's bundled source confirmed the URL `?print-pdf` flow and our `view: "print"` config injection land in the same code path: both add the `reveal-print` class and inject the same `@page { size: ${n}px ${r}px; margin: 0 }` rule that iOS Safari then ignores. So neither approach can side-step Safari's quirk. Chrome / Firefox / Brave for iPadOS share the WebKit engine (Apple's App Store rule) so they don't help either.
+
+The user found that **Paper Size = US Letter + Orientation = Landscape** in Safari's print sheet gives an acceptable result — slides fill the page, with a small "blob:…" URL + date strip at the bottom (Safari's "Show Headers and Footers" preference, suppressible there). The PDF button's `title` and the on-click status message now spell out that recipe so the next iPad user doesn't have to discover it.
+
+The fuller fix — bypass reveal's print mode entirely and lay slides out ourselves with viewport-relative CSS, freeing us from the `@page { size }` dance — is deferred to a future increment in case the workaround becomes annoying. UI text only; smoke test still 31/31.
+
+### Increment 31: Tap-to-expand details modal for render warnings
+
+The toolbar's status text shows "(N warnings)" after a render, with the full text in the element's `title` attribute. That's hard to use on iPad — long-press is undiscoverable, the tooltip truncates on small screens, and copying text out of a tooltip isn't really possible.
+
+A render-warnings modal now opens on tap. When the latest render has warnings, the status text picks up `data-has-details="true"`, which styles it as a tappable hint (dotted underline + a "›" chevron + pointer cursor). Tapping pops a centred modal with:
+
+- the warnings in a scrollable `<pre>` block (text-selectable on iPad);
+- a **Copy** button that puts the full list on the clipboard (with a manual selection fallback for environments where `navigator.clipboard.writeText` is unavailable);
+- × button, click-outside, and Escape all dismiss.
+
+Wiring:
+
+- `layout.ts`: a new `buildDetailsModal()` builds the modal DOM and appends it to `document.body` so it sits above `#app` (which has a transform from the keyboard-avoidance fix) and Dockview's z-indexed chrome. `LayoutHandle` grows `setStatusDetails(details)`; non-empty arrays arm the affordance, empty arrays clear it and hide the modal if it's open.
+- `main.ts`: `runRender` calls `setStatusDetails([])` when the render starts and `setStatusDetails(result.warnings)` after it lands, so the chevron tracks the current render's state.
+
+The existing `title`-tooltip path stays (cheap, occasionally useful on desktop hover). Smoke test still 31/31 — no render-pipeline change.
+
 -----
 
 ## Repo cleanup (deferred)

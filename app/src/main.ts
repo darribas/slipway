@@ -444,7 +444,7 @@ async function main(): Promise<void> {
   layout.pdfBtn.addEventListener("click", () => {
     if (!lastRenderedHtml) return;
     previewPane.openInNewTab(buildPrintVariant(lastRenderedHtml));
-    layout.setStatus("Print view opened — turn off Headers/Footers for a cleaner PDF", "ok");
+    layout.setStatus("Print view opened — in Safari's sheet, pick US Letter + Landscape", "ok");
   });
 
   layout.setVimOn(vimEnabled);
@@ -476,6 +476,8 @@ async function main(): Promise<void> {
     await flushAllAutosaves();
     layout.renderBtn.disabled = true;
     layout.setStatus("Rendering…");
+    // Clear any previous run's warnings affordance while the new render runs.
+    layout.setStatusDetails([]);
     try {
       const pandoc = await getPandoc();
       const inputs = await buildRenderInputs(path);
@@ -487,6 +489,7 @@ async function main(): Promise<void> {
       layout.setStale(false);
       const warn = result.warnings.length ? ` (${result.warnings.length} warnings)` : "";
       layout.setStatus(`Rendered in ${Math.round(result.durationMs)}ms${warn}`, "ok");
+      layout.setStatusDetails(result.warnings);
       if (result.warnings.length) {
         layout.status.title = result.warnings.join("\n");
         console.warn("render warnings:\n" + result.warnings.join("\n"));

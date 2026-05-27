@@ -224,6 +224,23 @@ html, body {
 .slipway-toolbar .status.warn { color: var(--warn); }
 .slipway-toolbar .status.error { color: var(--error); }
 .slipway-toolbar .status.ok { color: var(--ok); }
+/* When the status has details to show (e.g. render warnings), make it
+   look + behave like an interactive element. Tapping opens the details
+   modal — see buildDetailsModal in layout.ts. */
+.slipway-toolbar .status[data-has-details] {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.slipway-toolbar .status[data-has-details]::after {
+  content: " ›";
+  font-weight: 600;
+  opacity: 0.7;
+}
+.slipway-toolbar .status[data-has-details]:hover {
+  color: var(--accent);
+}
 
 /* Stale indicator dot — small coloured pip on the Render button when the
    editor's been modified since the last successful render. */
@@ -454,4 +471,91 @@ kbd {
   font: 12px ui-monospace, "SF Mono", Consolas, monospace;
   max-height: 200px;
   overflow: auto;
+}
+
+/* Details modal — used by the toolbar status to expose render warnings on
+   demand. Centred over the whole viewport, click-outside / Escape / ×
+   dismisses. Markup is built in buildDetailsModal in layout.ts and appended
+   to <body>, so it sits above #app and Dockview's z-indices. */
+.slipway-details-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.slipway-details-modal[hidden] { display: none; }
+.slipway-details-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+.slipway-details-card {
+  position: relative;
+  z-index: 1;
+  width: min(640px, 100%);
+  max-height: 80vh;
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+.slipway-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.slipway-details-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.slipway-details-close {
+  background: transparent;
+  border: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.slipway-details-close:hover { color: var(--fg); }
+.slipway-details-body {
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  flex: 1 1 auto;
+  font: 12px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.slipway-details-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+.slipway-details-copy {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.slipway-details-copy:hover { background: var(--bg-panel); }
+.slipway-details-copy[data-copied="true"] {
+  color: var(--ok);
+  border-color: var(--ok);
 }
