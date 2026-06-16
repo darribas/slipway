@@ -27,25 +27,33 @@ export interface FileTreeHandle {
   setActive: (path: string | null) => void;
 }
 
-interface TreeNode {
+export interface TreeNode {
   name: string;
   path: string;
   isDir: boolean;
   children: Map<string, TreeNode>;
 }
 
-function buildTree(paths: string[]): TreeNode {
+export function buildTree(paths: string[]): TreeNode {
   const root: TreeNode = { name: "", path: "", isDir: true, children: new Map() };
   for (const path of paths) {
     const parts = path.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+    // A dot-prefixed leaf is hidden: an empty folder's `.placeholder` stub, or
+    // root markers like `.seeded` / `.bundled-themes`. But its ancestor
+    // directories must still materialise — otherwise a freshly-created empty
+    // folder (which exists only as `folder/.placeholder`) would show nothing.
+    // So when the leaf is hidden we walk the directory segments only.
+    const leafHidden = parts[parts.length - 1].startsWith(".");
+    const lastIndex = leafHidden ? parts.length - 2 : parts.length - 1;
     let cur = root;
-    for (let i = 0; i < parts.length; i++) {
+    for (let i = 0; i <= lastIndex; i++) {
       const name = parts[i];
-      const isLast = i === parts.length - 1;
+      const isFile = i === parts.length - 1; // only true for a non-hidden leaf
       const fullPath = parts.slice(0, i + 1).join("/");
       let child = cur.children.get(name);
       if (!child) {
-        child = { name, path: fullPath, isDir: !isLast, children: new Map() };
+        child = { name, path: fullPath, isDir: !isFile, children: new Map() };
         cur.children.set(name, child);
       }
       cur = child;

@@ -448,6 +448,39 @@ describe("resolveDeclaredPath", () => {
   });
 });
 
+describe("file tree buildTree", () => {
+  test("empty folder (only .placeholder) still appears as a directory", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree(["myfolder/.placeholder"]);
+    const folder = root.children.get("myfolder");
+    expect(folder?.isDir).toBe(true);
+    expect(folder?.children.size).toBe(0); // placeholder hidden, folder kept
+  });
+
+  test("root dotfile markers are hidden entirely", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree([".seeded", ".bundled-themes", "demos/slide.qmd"]);
+    expect(root.children.has(".seeded")).toBe(false);
+    expect(root.children.has(".bundled-themes")).toBe(false);
+    expect(root.children.has("demos")).toBe(true);
+  });
+
+  test("nested files keep both folder and file nodes", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree(["assets/theme.scss"]);
+    const a = root.children.get("assets");
+    expect(a?.isDir).toBe(true);
+    expect(a?.children.get("theme.scss")?.isDir).toBe(false);
+  });
+
+  test("folder with a real file and a placeholder shows only the file", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree(["demos/.placeholder", "demos/slide.qmd"]);
+    const d = root.children.get("demos");
+    expect([...d!.children.keys()]).toEqual(["slide.qmd"]);
+  });
+});
+
 describe("rebaseChildPath", () => {
   test("grafts the sub-path onto the new folder", () => {
     expect(rebaseChildPath("a", "b/c", "a/x/y.qmd")).toBe("b/c/x/y.qmd");

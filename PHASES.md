@@ -687,6 +687,14 @@ The file tree's rename only swapped a file's last path segment, so there was no 
 
 45 tests, `tsc` clean, build green. Folders are still implicit prefixes (no real directory entries), so moving an empty folder modelled only by a `.placeholder` moves the placeholder; moving onto an existing path is refused rather than merged.
 
+### Increment 34.4: Fix the +Folder button (empty folders were invisible)
+
+Creating a folder appeared to do nothing. The write succeeded — `onCreateFolder` stores `folder/.placeholder` to model an otherwise-empty directory — but `refreshTree()` filtered out every path whose **leaf** starts with `.`, dropping the placeholder *path entirely*. Since folders exist only implicitly (derived from the paths of files inside them), nothing then established `folder/`, so it never rendered. The dot-leaf filter and the empty-folder model were in direct conflict.
+
+Fix moves the hiding into `buildTree`: a dot-prefixed leaf (the `.placeholder`, or root markers like `.seeded` / `.bundled-themes`) is still hidden, but its **ancestor directories are materialised** first, so an empty folder shows up as an expandable (empty) directory. `refreshTree()` now passes the unfiltered list and lets `buildTree` own the hiding. `buildTree` + `TreeNode` are exported so the behaviour is unit-tested directly: empty-folder-from-placeholder, root markers hidden, nested file keeps folder+file nodes, and a folder with both a real file and a placeholder shows only the file. 49 tests, `tsc` clean, build green.
+
+(Verified through the render/test harness and a production build; the live UI click-through wasn't run — this remote environment has no browser/DOM, and the fix is covered by the pure `buildTree` tests that reproduce the bug.)
+
 -----
 
 ## Repo cleanup (deferred)

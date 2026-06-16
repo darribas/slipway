@@ -389,13 +389,10 @@ async function main(): Promise<void> {
   }
 
   async function refreshTree(): Promise<void> {
-    const all = await listFiles();
-    fileTree.refresh(
-      all.filter((p) => {
-        const segments = p.split("/");
-        return !segments[segments.length - 1].startsWith(".");
-      }),
-    );
+    // Pass the full list; buildTree hides dot-prefixed leaves (folder
+    // .placeholder stubs, .seeded / .bundled-themes markers) while keeping the
+    // directories they establish — so empty folders still show up.
+    fileTree.refresh(await listFiles());
     fileTree.setActive(getActiveEditor());
   }
 
