@@ -675,7 +675,17 @@ The seed put `slide.qmd` and `_snippet.qmd` at the project root, which started t
 - `main.ts` boot-open now prefers the deck whose basename is `slide.qmd` (wherever it lives) instead of the alphabetically-first `.qmd`, so users still land on the getting-started deck rather than `demos/imago-showcase.qmd`.
 - Smoke test reads the decks from their new `demos/` paths. 41 tests, `tsc` clean, build green.
 
-Existing-install note: this reorg is seed-only (first run). Installs created earlier keep their root `slide.qmd`; they won't get the `demos/` layout or the showcase deck automatically, and — until an in-tree "move file to another folder" action exists (the file tree can rename within a folder but not move across folders yet) — can't reshuffle it through the UI. The showcase is available to them by import. A move action / demo-deck top-up is deferred.
+Existing-install note: this reorg is seed-only (first run). Installs created earlier keep their root `slide.qmd`; they won't get the `demos/` layout or the showcase deck automatically, and — until an in-tree "move file to another folder" action exists (the file tree can rename within a folder but not move across folders yet) — can't reshuffle it through the UI. The showcase is available to them by import. A move action / demo-deck top-up is deferred. (The move action landed in Increment 34.3.)
+
+### Increment 34.3: Move files (and folders) across the tree
+
+The file tree's rename only swapped a file's last path segment, so there was no way to move a file into another folder — exactly what an existing install needs to reshuffle into `demos/`. Generalised the action into move/rename:
+
+- `file-tree.ts`: the `✎` action (now titled "Move / rename") prompts with the **whole path** pre-filled. Edit the name to rename in place; edit the folder portion to move — e.g. `slide.qmd` → `demos/slide.qmd`. Leading/trailing slashes are trimmed; an empty or unchanged path is a no-op.
+- `main.ts`: `onRename` handles both cases. A file (an exact storage entry) goes through a new `moveOne()` that renames in storage and keeps in-memory state in sync — the open editor tab's path/title and the active-editor / active-deck pointers. A folder (no exact entry, just an implicit prefix) re-keys every descendant: it lists `dir/*`, pre-checks the whole subtree for collisions before touching anything, then `moveOne()`s each child so open tabs follow the move too.
+- The sub-path math is a pure helper, `rebaseChildPath(oldDir, newDir, child)` in `path-resolve.ts`, with unit tests covering the graft, single-segment moves, non-children, and the sibling-prefix trap (`demos` must not match `demos-old/…`). Storage's existing `rename()` already throws on an occupied target, so individual file moves are collision-safe on top of the folder pre-check.
+
+45 tests, `tsc` clean, build green. Folders are still implicit prefixes (no real directory entries), so moving an empty folder modelled only by a `.placeholder` moves the placeholder; moving onto an existing path is refused rather than merged.
 
 -----
 

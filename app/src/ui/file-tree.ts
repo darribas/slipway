@@ -5,8 +5,9 @@
 // Action UX is touch-friendly: each row has visible action buttons rather
 // than a right-click context menu, since iPad Safari doesn't surface
 // right-click and long-press would conflict with iOS text-selection. New-
-// file / new-folder / rename use the platform prompt() — good enough for
-// MVP; inline editing is a polish item.
+// file / new-folder / move-rename use the platform prompt() — good enough
+// for MVP; inline editing is a polish item. The move/rename prompt edits the
+// whole path, so changing the folder portion moves the file (or folder).
 
 export interface FileTreeCallbacks {
   onOpen: (path: string) => void;
@@ -122,13 +123,18 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
     if (!name) return;
     void cb.onCreateFolder(parentDir, name);
   }
-  function handleRename(path: string): void {
-    const segments = path.split("/");
-    const oldName = segments[segments.length - 1];
-    const newName = window.prompt(`Rename ${path} to:`, oldName);
-    if (!newName || newName === oldName) return;
-    segments[segments.length - 1] = newName;
-    void cb.onRename(path, segments.join("/"));
+  function handleRename(path: string, isDir: boolean): void {
+    // The prompt takes the whole path, so editing the name renames in place
+    // and editing the folder portion moves the file (or folder) elsewhere —
+    // e.g. "slide.qmd" → "demos/slide.qmd".
+    const label = isDir
+      ? `Move / rename folder — enter its new path:`
+      : `Move / rename — enter the new path:`;
+    const next = window.prompt(label, path);
+    if (next == null) return;
+    const cleaned = next.trim().replace(/^\/+|\/+$/g, "");
+    if (!cleaned || cleaned === path) return;
+    void cb.onRename(path, cleaned);
   }
   function handleDelete(path: string): void {
     if (!window.confirm(`Delete ${path}?\nThis cannot be undone.`)) return;
@@ -237,9 +243,9 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
         handleNewFile(node.path);
       }));
     }
-    actions.appendChild(actionButton("✎", "Rename", (e) => {
+    actions.appendChild(actionButton("✎", "Move / rename", (e) => {
       e.stopPropagation();
-      handleRename(node.path);
+      handleRename(node.path, node.isDir);
     }));
     actions.appendChild(actionButton("×", "Delete", (e) => {
       e.stopPropagation();

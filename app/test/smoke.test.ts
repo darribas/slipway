@@ -21,7 +21,7 @@ import { convert } from "pandoc-wasm";
 import { renderDeck } from "../src/core/render";
 import { buildPrintVariant } from "../src/core/print";
 import { extractDeclarations } from "../src/core/frontmatter";
-import { resolveDeclaredPath } from "../src/core/path-resolve";
+import { resolveDeclaredPath, rebaseChildPath } from "../src/core/path-resolve";
 import type { PandocInstance, RenderInputs } from "../src/core/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -445,6 +445,26 @@ describe("resolveDeclaredPath", () => {
   test("exact match preferred over basename", () => {
     const t = [...tree, "assets/dark.scss"];
     expect(resolveDeclaredPath("themes/dark.scss", t)).toBe("themes/dark.scss");
+  });
+});
+
+describe("rebaseChildPath", () => {
+  test("grafts the sub-path onto the new folder", () => {
+    expect(rebaseChildPath("a", "b/c", "a/x/y.qmd")).toBe("b/c/x/y.qmd");
+  });
+
+  test("moving a root file's folder (single segment)", () => {
+    expect(rebaseChildPath("demos", "archive/demos", "demos/slide.qmd")).toBe(
+      "archive/demos/slide.qmd",
+    );
+  });
+
+  test("leaves a path that isn't under oldDir untouched", () => {
+    expect(rebaseChildPath("demos", "archive", "assets/theme.scss")).toBe("assets/theme.scss");
+  });
+
+  test("does not treat a sibling prefix as a child (demos vs demos-old)", () => {
+    expect(rebaseChildPath("demos", "archive", "demos-old/slide.qmd")).toBe("demos-old/slide.qmd");
   });
 });
 
