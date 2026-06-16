@@ -376,10 +376,13 @@ async function main(): Promise<void> {
 
   await refreshTree();
 
-  // Open the first .qmd at boot so the user lands in a familiar place.
+  // Open a deck at boot so the user lands in a familiar place. Prefer the
+  // getting-started deck (slide.qmd, wherever it lives) over whatever sorts
+  // first alphabetically — e.g. demos/imago-showcase.qmd would otherwise win.
   const initialQmds = await listQmds();
-  if (initialQmds[0]) {
-    await openFile(initialQmds[0]);
+  const initialQmd = initialQmds.find((p) => p.split("/").pop() === "slide.qmd") ?? initialQmds[0];
+  if (initialQmd) {
+    await openFile(initialQmd);
   } else {
     layout.setStatus("No .qmd files in project — import a zip or create one", "warn");
   }

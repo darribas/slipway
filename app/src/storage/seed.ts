@@ -13,8 +13,9 @@
 //     already present, so EXISTING installs receive themes shipped after they
 //     first seeded — without clobbering the user's deck or edits.
 
-import slideQmd      from "../templates/slipway-demo/slide.qmd?raw";
-import snippetQmd    from "../templates/slipway-demo/_snippet.qmd?raw";
+import slideQmd      from "../templates/slipway-demo/demos/slide.qmd?raw";
+import snippetQmd    from "../templates/slipway-demo/demos/_snippet.qmd?raw";
+import showcaseQmd   from "../templates/slipway-demo/demos/imago-showcase.qmd?raw";
 import themeScss     from "../templates/slipway-demo/theme.scss?raw";
 import imagoScss     from "../templates/slipway-demo/assets/imago.scss?raw";
 import journalScss   from "../templates/slipway-demo/assets/journal.scss?raw";
@@ -75,8 +76,12 @@ async function writeMissingBundledFiles(): Promise<string[]> {
 export async function seedIfEmpty(): Promise<boolean> {
   if (await exists(SEED_MARKER)) return false;
 
-  await writeText("slide.qmd", slideQmd);
-  await writeText("_snippet.qmd", snippetQmd);
+  // Demo decks live under demos/ so the project root stays uncluttered; shared
+  // assets stay at assets/ and the decks reach them via ../assets/… (which both
+  // Slipway and `quarto render` resolve relative to the deck).
+  await writeText("demos/slide.qmd", slideQmd);
+  await writeText("demos/_snippet.qmd", snippetQmd);
+  await writeText("demos/imago-showcase.qmd", showcaseQmd);
   await writeText("assets/theme.scss", themeScss);
   await writeText("assets/references.bib", referencesBib);
   // Bundled themes + self-hosted fonts: switch with `theme: assets/imago.scss`

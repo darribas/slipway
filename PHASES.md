@@ -665,6 +665,18 @@ Increment 34 only delivered the bundled themes to *new* installs: `seedIfEmpty()
 
 Net effect: a deployed update reaches every existing install on next load — the themes appear in the Files panel and `theme: assets/imago.scss` / `theme: assets/journal.scss` just work, with the user's own deck untouched. Bump `BUNDLED_VERSION` when shipping a future bundled theme to trigger another top-up pass. 41 tests (unchanged — seed.ts is IDB-backed and outside the node test harness), `tsc` clean, build green.
 
+### Increment 34.2: Seed decks into demos/ + an Imago showcase deck
+
+The seed put `slide.qmd` and `_snippet.qmd` at the project root, which started to clutter the default space once the bundled themes landed. Reorganised the seed so demo decks live under `demos/` and the root stays clean:
+
+- Template decks moved to `src/templates/slipway-demo/demos/` (`slide.qmd`, `_snippet.qmd`), and a new **`imago-showcase.qmd`** added there — a full tour of the Imago theme (palette swatches, text-colour / highlighter / background classes, light vs dark slides, layout helpers, captions, lists/fragments, code, tables, math, citations). Verified end-to-end through `renderDeck` (fonts inlined, `#refs` resolved, `.dark` slide present, no pandoc errors).
+- The decks reach shared files via `../assets/…` (e.g. `theme: ../assets/theme.scss`, `bibliography: ../assets/references.bib`, `theme: ../assets/imago.scss`). Slipway's `resolveDeclaredPath` strips the leading `../` against its flat store, and `quarto render` resolves it relative to the deck on disk — so the round-trip still holds with the new nesting.
+- `seed.ts` writes `demos/slide.qmd`, `demos/_snippet.qmd`, `demos/imago-showcase.qmd`; assets stay at `assets/`.
+- `main.ts` boot-open now prefers the deck whose basename is `slide.qmd` (wherever it lives) instead of the alphabetically-first `.qmd`, so users still land on the getting-started deck rather than `demos/imago-showcase.qmd`.
+- Smoke test reads the decks from their new `demos/` paths. 41 tests, `tsc` clean, build green.
+
+Existing-install note: this reorg is seed-only (first run). Installs created earlier keep their root `slide.qmd`; they won't get the `demos/` layout or the showcase deck automatically, and — until an in-tree "move file to another folder" action exists (the file tree can rename within a folder but not move across folders yet) — can't reshuffle it through the UI. The showcase is available to them by import. A move action / demo-deck top-up is deferred.
+
 -----
 
 ## Repo cleanup (deferred)

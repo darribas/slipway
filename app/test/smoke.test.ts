@@ -31,10 +31,10 @@ const FIGTREE = resolve(DEMO, "assets/fonts/figtree");
 
 async function loadDemoInputs(): Promise<RenderInputs> {
   const [qmd, scss, bib, snippet] = await Promise.all([
-    readFile(resolve(DEMO, "slide.qmd"),       "utf8"),
+    readFile(resolve(DEMO, "demos/slide.qmd"),  "utf8"),
     readFile(resolve(DEMO, "theme.scss"),       "utf8"),
     readFile(resolve(DEMO, "references.bib"),   "utf8"),
-    readFile(resolve(DEMO, "_snippet.qmd"),     "utf8"),
+    readFile(resolve(DEMO, "demos/_snippet.qmd"), "utf8"),
   ]);
   return {
     qmd,
