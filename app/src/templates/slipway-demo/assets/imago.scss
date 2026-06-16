@@ -79,6 +79,17 @@ $presentation-menu-color: $imago-grey;
   font-size: 1.8em;
 }
 
+// Don't shout. reveal.js's white base uppercases every heading
+// (text-transform: uppercase); keep headings in their authored case.
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4,
+.reveal h5,
+.reveal h6 {
+  text-transform: none;
+}
+
 // Progress bar styling
 .reveal .progress {
   background: rgba($orange, 0.2);

@@ -294,6 +294,11 @@ describe("seeded Imago theme", () => {
     expect(html).toMatch(/\.reveal h1\s*\{[^}]*font-size:\s*1\.8em/i);
   }, 30_000);
 
+  test("headings keep their authored case (override reveal's uppercase)", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    expect(html).toMatch(/\.reveal h1[^{]*\{[^}]*text-transform:\s*none/i);
+  }, 30_000);
+
   test("imago.scss carries Quarto layer markers (round-trip compatibility)", async () => {
     const scss = await readFile(resolve(DEMO, "assets/imago.scss"), "utf8");
     expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
