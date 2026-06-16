@@ -695,6 +695,10 @@ Fix moves the hiding into `buildTree`: a dot-prefixed leaf (the `.placeholder`, 
 
 (Verified through the render/test harness and a production build; the live UI click-through wasn't run — this remote environment has no browser/DOM, and the fix is covered by the pure `buildTree` tests that reproduce the bug.)
 
+### Increment 34.5: Imago default text colour on light slides
+
+Default (un-classed) Imago slides rendered with reveal.js's white-theme text colour (`#222`) instead of imago-grey. The theme set `$body-color: $imago-grey`, but that variable only feeds Quarto's reveal template — Slipway compiles the SCSS standalone with Dart Sass, so the assignment emitted no CSS and the colour fell through to the white base; only the explicit `.slide.light` / `.dark` rules set a colour. Added an explicit `.reveal { color: $imago-grey; }` rule (which `.dark` still overrides to white), so default and light slides use imago-grey in both Slipway and Quarto. New smoke assertion checks the compiled `.reveal` colour rule is present. 50 tests.
+
 -----
 
 ## Repo cleanup (deferred)

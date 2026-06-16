@@ -281,6 +281,14 @@ describe("seeded Imago theme", () => {
     expect(html).toMatch(/url\(data:font\/woff2;base64,/);
   }, 30_000);
 
+  test("default body text uses imago-grey on the light background", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    // An explicit `.reveal { color: #4a4a49 }` rule must be emitted — the
+    // Quarto `$body-color` variable alone has no effect in Slipway's
+    // standalone Sass compile, so without it text falls back to reveal's #222.
+    expect(html).toMatch(/\.reveal\s*\{[^}]*color:\s*#4a4a49/i);
+  }, 30_000);
+
   test("imago.scss carries Quarto layer markers (round-trip compatibility)", async () => {
     const scss = await readFile(resolve(DEMO, "assets/imago.scss"), "utf8");
     expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
