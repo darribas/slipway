@@ -15,3 +15,9 @@ declare module "virtual:reveal-print-css" {
   const css: string;
   export default css;
 }
+
+declare module "virtual:seed-fonts" {
+  // Map of project-relative font path → base64-encoded file contents.
+  const fonts: Record<string, string>;
+  export default fonts;
+}

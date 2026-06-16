@@ -1,10 +1,11 @@
 import { compileScss } from "./sass";
 import { preprocessDeck } from "./preprocess";
 import { extractDeclarations } from "./frontmatter";
-import { injectRevealConfigOverride, injectSandboxCompat, inlineKatexAssets, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
+import { injectRevealConfigOverride, injectSandboxCompat, inlineFontUrls, inlineKatexAssets, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
 import type { PandocInstance, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
+const FONT_EXTENSIONS = new Set(["woff2", "woff", "ttf", "otf"]);
 
 function mimeFor(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
@@ -16,6 +17,10 @@ function mimeFor(name: string): string {
       gif: "image/gif",
       webp: "image/webp",
       svg: "image/svg+xml",
+      woff2: "font/woff2",
+      woff: "font/woff",
+      ttf: "font/ttf",
+      otf: "font/otf",
     }[ext] ?? "application/octet-stream"
   );
 }
@@ -38,20 +43,29 @@ export async function renderDeck(
   // The stylesheet may be either Sass source (compile via Dart Sass) or
   // already-compiled CSS (use as-is). Empty string means no theme in the
   // project; skip the entire CSS plumbing in that case.
-  const css = inputs.stylesheet
+  let css = inputs.stylesheet
     ? inputs.stylesheetIsPrecompiled
       ? inputs.stylesheet
       : compileScss(inputs.stylesheet)
     : "";
 
-  // Build the asset-URI map for image inlining (only image-typed assets).
+  // Build the asset-URI maps: images get inlined into the markdown, fonts
+  // get inlined into the compiled theme CSS. Both must become data URIs
+  // because the deck renders in a null-origin sandboxed iframe where
+  // relative URLs (and external CDN fetches) don't resolve.
   const assetUris = new Map<string, string>();
+  const fontUris = new Map<string, string>();
   for (const [name, bytes] of inputs.assets) {
     const ext = name.split(".").pop()?.toLowerCase() ?? "";
     if (IMAGE_EXTENSIONS.has(ext)) {
       assetUris.set(name, bytesToDataUri(bytes, mimeFor(name)));
+    } else if (FONT_EXTENSIONS.has(ext)) {
+      fontUris.set(name, bytesToDataUri(bytes, mimeFor(name)));
     }
   }
+
+  // Embed self-hosted theme fonts as data URIs before the CSS is inlined.
+  if (css) css = inlineFontUrls(css, fontUris);
 
   const { qmd } = preprocessDeck(inputs.qmd, { assetUris, includes: inputs.includes });
 
