@@ -73,6 +73,12 @@ $presentation-menu-color: $imago-grey;
   color: $imago-grey;
 }
 
+// H1 (section / title slides). reveal.js's white base sets this to 2.5em,
+// which is oversized for Imago; bring it down. Tweak the value to taste.
+.reveal h1 {
+  font-size: 1.8em;
+}
+
 // Progress bar styling
 .reveal .progress {
   background: rgba($orange, 0.2);

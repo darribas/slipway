@@ -289,6 +289,11 @@ describe("seeded Imago theme", () => {
     expect(html).toMatch(/\.reveal\s*\{[^}]*color:\s*#4a4a49/i);
   }, 30_000);
 
+  test("H1 is sized down from reveal's 2.5em default", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    expect(html).toMatch(/\.reveal h1\s*\{[^}]*font-size:\s*1\.8em/i);
+  }, 30_000);
+
   test("imago.scss carries Quarto layer markers (round-trip compatibility)", async () => {
     const scss = await readFile(resolve(DEMO, "assets/imago.scss"), "utf8");
     expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
