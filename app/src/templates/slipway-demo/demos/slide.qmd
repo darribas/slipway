@@ -5,14 +5,14 @@ author: "Your Name"
 date: today
 format:
   revealjs:
-    theme: assets/theme.scss
+    theme: ../assets/theme.scss
     navigation-mode: linear
     controls-layout: bottom-right
     center: false
     slide-number: true
 title-slide-attributes:
   data-background-color: "#B8D6EE"
-bibliography: assets/references.bib
+bibliography: ../assets/references.bib
 ---
 
 # Getting started

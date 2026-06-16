@@ -5,8 +5,9 @@
 // Action UX is touch-friendly: each row has visible action buttons rather
 // than a right-click context menu, since iPad Safari doesn't surface
 // right-click and long-press would conflict with iOS text-selection. New-
-// file / new-folder / rename use the platform prompt() — good enough for
-// MVP; inline editing is a polish item.
+// file / new-folder / move-rename use the platform prompt() — good enough
+// for MVP; inline editing is a polish item. The move/rename prompt edits the
+// whole path, so changing the folder portion moves the file (or folder).
 
 export interface FileTreeCallbacks {
   onOpen: (path: string) => void;
@@ -26,25 +27,33 @@ export interface FileTreeHandle {
   setActive: (path: string | null) => void;
 }
 
-interface TreeNode {
+export interface TreeNode {
   name: string;
   path: string;
   isDir: boolean;
   children: Map<string, TreeNode>;
 }
 
-function buildTree(paths: string[]): TreeNode {
+export function buildTree(paths: string[]): TreeNode {
   const root: TreeNode = { name: "", path: "", isDir: true, children: new Map() };
   for (const path of paths) {
     const parts = path.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+    // A dot-prefixed leaf is hidden: an empty folder's `.placeholder` stub, or
+    // root markers like `.seeded` / `.bundled-themes`. But its ancestor
+    // directories must still materialise — otherwise a freshly-created empty
+    // folder (which exists only as `folder/.placeholder`) would show nothing.
+    // So when the leaf is hidden we walk the directory segments only.
+    const leafHidden = parts[parts.length - 1].startsWith(".");
+    const lastIndex = leafHidden ? parts.length - 2 : parts.length - 1;
     let cur = root;
-    for (let i = 0; i < parts.length; i++) {
+    for (let i = 0; i <= lastIndex; i++) {
       const name = parts[i];
-      const isLast = i === parts.length - 1;
+      const isFile = i === parts.length - 1; // only true for a non-hidden leaf
       const fullPath = parts.slice(0, i + 1).join("/");
       let child = cur.children.get(name);
       if (!child) {
-        child = { name, path: fullPath, isDir: !isLast, children: new Map() };
+        child = { name, path: fullPath, isDir: !isFile, children: new Map() };
         cur.children.set(name, child);
       }
       cur = child;
@@ -122,13 +131,18 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
     if (!name) return;
     void cb.onCreateFolder(parentDir, name);
   }
-  function handleRename(path: string): void {
-    const segments = path.split("/");
-    const oldName = segments[segments.length - 1];
-    const newName = window.prompt(`Rename ${path} to:`, oldName);
-    if (!newName || newName === oldName) return;
-    segments[segments.length - 1] = newName;
-    void cb.onRename(path, segments.join("/"));
+  function handleRename(path: string, isDir: boolean): void {
+    // The prompt takes the whole path, so editing the name renames in place
+    // and editing the folder portion moves the file (or folder) elsewhere —
+    // e.g. "slide.qmd" → "demos/slide.qmd".
+    const label = isDir
+      ? `Move / rename folder — enter its new path:`
+      : `Move / rename — enter the new path:`;
+    const next = window.prompt(label, path);
+    if (next == null) return;
+    const cleaned = next.trim().replace(/^\/+|\/+$/g, "");
+    if (!cleaned || cleaned === path) return;
+    void cb.onRename(path, cleaned);
   }
   function handleDelete(path: string): void {
     if (!window.confirm(`Delete ${path}?\nThis cannot be undone.`)) return;
@@ -237,9 +251,9 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
         handleNewFile(node.path);
       }));
     }
-    actions.appendChild(actionButton("✎", "Rename", (e) => {
+    actions.appendChild(actionButton("✎", "Move / rename", (e) => {
       e.stopPropagation();
-      handleRename(node.path);
+      handleRename(node.path, node.isDir);
     }));
     actions.appendChild(actionButton("×", "Delete", (e) => {
       e.stopPropagation();

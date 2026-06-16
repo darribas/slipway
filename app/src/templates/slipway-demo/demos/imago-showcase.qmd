@@ -1,0 +1,221 @@
+---
+title: "Imago"
+subtitle: "A complete tour of the theme"
+author: "Your Name"
+date: today
+lang: en
+format:
+  revealjs:
+    theme: ../assets/imago.scss
+    navigation-mode: linear
+    controls-layout: bottom-right
+    center: false
+    slide-number: true
+title-slide-attributes:
+  data-background-color: "#E2E5F3"
+bibliography: ../assets/references.bib
+---
+
+# The palette
+
+## Nine named colours
+
+Imago ships a fixed palette. Every colour is available three ways: as a
+**text** colour, a **background** colour, and (for three of them) a
+**highlighter**.
+
+[navy]{.bg-navy .white} ·
+[blue]{.bg-blue .white} ·
+[green]{.bg-green .white} ·
+[orange]{.bg-orange .white} ·
+[grey]{.bg-grey .imago-grey} ·
+[light-grey]{.bg-light-grey .imago-grey} ·
+[dark-grey]{.bg-dark-grey .white} ·
+[imago-grey]{.bg-imago-grey .white}
+
+| Token | Hex | Token | Hex |
+|---|---|---|---|
+| navy | `#24226F` | blue | `#1877CF` |
+| green | `#03CEA3` | orange | `#FF8F42` |
+| grey | `#B8BCD1` | light-grey | `#E2E5F3` |
+| dark-grey | `#8C91A8` | imago-grey | `#4a4a49` |
+
+## Text colours
+
+Apply a colour to a run of words with a bracketed span: `[text]{.navy}`.
+
+This sentence mixes [navy]{.navy}, [blue]{.blue}, [green]{.green},
+[orange]{.orange}, [dark-grey]{.dark-grey} and [imago-grey]{.imago-grey}.
+
+You can combine a colour with emphasis: **[bold orange]{.orange}**,
+_[italic green]{.green}_.
+
+::: notes
+The full set of text classes: `.navy .blue .green .orange .grey
+.light-grey .dark-grey .imago-grey .white`.
+:::
+
+## Highlighters
+
+Three padded, rounded highlight boxes — `[…]{.hlg}` and friends:
+
+The headline result was [up 42%]{.hlg} this quarter, with
+[strong retention]{.hlg-green} and [no churn]{.hlg-blue} in the cohort.
+
+- `.hlg` — orange (the default)
+- `.hlg-green` — green
+- `.hlg-blue` — blue
+
+## Background blocks
+
+The `.bg-*` classes shine on whole blocks. Put them on a fenced div and
+pair with a text colour for contrast:
+
+::: {.bg-navy .white}
+**Navy block.** White text on navy — good for a callout or a key takeaway.
+:::
+
+::: {.bg-light-grey}
+**Light-grey block.** Subtle panel for asides; text stays imago-grey.
+:::
+
+# Light & dark slides
+
+## This is a light slide {.light}
+
+Light is the default, but `{.light}` makes it explicit. Headings are navy,
+body text is imago-grey, and [links are orange](https://quarto.org).
+
+Add the class to the slide's `##` heading: `## Title {.light}`.
+
+## This is a dark slide {.dark}
+
+`{.dark}` flips the whole slide: imago-grey background, white text, white
+headings, and [links turn green](https://quarto.org).
+
+- Bullets stay readable
+- [Coloured spans]{.orange} still work — [like this]{.green}
+- Highlighters too: [emphasis]{.hlg}
+
+# Layout
+
+## Vertical centring is the default
+
+Imago vertically centres slide content by default, so short slides sit in
+the middle of the frame instead of clinging to the top.
+
+This is great for chapter breaks and single-idea slides.
+
+## Top-aligned content {.align-top}
+
+Add `{.align-top}` to pin content to the top instead — useful when a slide
+has a lot of material and you want it to read top-down.
+
+1. First point
+2. Second point
+3. Third point
+
+## Two columns with a caption
+
+:::: {.columns}
+
+::: {.column width="55%"}
+::: {.bg-light-grey}
+&nbsp;
+
+**Figure area**
+
+&nbsp;
+:::
+<small>A figure caption set in the `.column small` style — centred, muted dark-grey, with [orange links](https://quarto.org).</small>
+:::
+
+::: {.column width="45%"}
+**Captions** are styled automatically inside a `.column`: any `<small>` (or
+a pandoc image caption) becomes centred, small, and dark-grey.
+
+Drop a real image in with:
+
+```markdown
+![My caption](assets/photo.jpg)
+```
+:::
+
+::::
+
+# Typography & content
+
+## Figtree, self-hosted
+
+The theme is set in **Figtree** — a variable sans-serif bundled with the
+project (no network needed). It carries the full weight range, so
+**bold**, regular, and _italic_ all render from one font.
+
+> “Typography is the craft of endowing human language with a durable
+> visual form.” — a blockquote, styled by the theme.
+
+## Lists & fragments
+
+Reveal items one at a time by wrapping a list in `.incremental`:
+
+::: {.incremental}
+- Point one — visible immediately
+- Point two — press **→**
+- Point three — and so on
+:::
+
+## Code
+
+Syntax highlighting, no execution:
+
+```python
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+```
+
+Inline `code` is styled too.
+
+## Tables
+
+| Feature | Class | Example |
+|---|---|---|
+| Text colour | `.orange` | [orange]{.orange} |
+| Highlight | `.hlg-green` | [green]{.hlg-green} |
+| Background | `.bg-navy` | navy block |
+| Dark slide | `{.dark}` | this row's theme |
+
+## Math
+
+Rendered by KaTeX, fully offline.
+
+Inline: $E = mc^2$
+
+Display:
+
+$$
+\hat{\boldsymbol{\beta}} = \bigl(\mathbf{X}^\top \mathbf{X}\bigr)^{-1}\mathbf{X}^\top \mathbf{y}
+$$
+
+## Compact text {.align-top}
+
+Wrap dense material in `.small-font` to tighten line-height:
+
+::: {.small-font}
+This block uses the `.small-font` utility. It keeps the type at the base
+size but tightens the leading, which helps when a slide carries a longer
+passage of explanatory prose that would otherwise feel airy and spread out
+across the frame.
+:::
+
+# Citations & references
+
+## Citing sources
+
+Declare a `.bib` in the frontmatter and cite inline. Slipway built on
+Pandoc [@pandoc] and reveal.js [@revealjs]; the bibliography below is
+generated into the themed `#refs` block.
+
+## References
+
+::: {#refs}
+:::

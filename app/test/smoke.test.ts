@@ -21,7 +21,7 @@ import { convert } from "pandoc-wasm";
 import { renderDeck } from "../src/core/render";
 import { buildPrintVariant } from "../src/core/print";
 import { extractDeclarations } from "../src/core/frontmatter";
-import { resolveDeclaredPath } from "../src/core/path-resolve";
+import { resolveDeclaredPath, rebaseChildPath } from "../src/core/path-resolve";
 import type { PandocInstance, RenderInputs } from "../src/core/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -31,10 +31,10 @@ const FIGTREE = resolve(DEMO, "assets/fonts/figtree");
 
 async function loadDemoInputs(): Promise<RenderInputs> {
   const [qmd, scss, bib, snippet] = await Promise.all([
-    readFile(resolve(DEMO, "slide.qmd"),       "utf8"),
+    readFile(resolve(DEMO, "demos/slide.qmd"),  "utf8"),
     readFile(resolve(DEMO, "theme.scss"),       "utf8"),
     readFile(resolve(DEMO, "references.bib"),   "utf8"),
-    readFile(resolve(DEMO, "_snippet.qmd"),     "utf8"),
+    readFile(resolve(DEMO, "demos/_snippet.qmd"), "utf8"),
   ]);
   return {
     qmd,
@@ -281,6 +281,24 @@ describe("seeded Imago theme", () => {
     expect(html).toMatch(/url\(data:font\/woff2;base64,/);
   }, 30_000);
 
+  test("default body text uses imago-grey on the light background", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    // An explicit `.reveal { color: #4a4a49 }` rule must be emitted — the
+    // Quarto `$body-color` variable alone has no effect in Slipway's
+    // standalone Sass compile, so without it text falls back to reveal's #222.
+    expect(html).toMatch(/\.reveal\s*\{[^}]*color:\s*#4a4a49/i);
+  }, 30_000);
+
+  test("H1 is sized down from reveal's 2.5em default", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    expect(html).toMatch(/\.reveal h1\s*\{[^}]*font-size:\s*1\.8em/i);
+  }, 30_000);
+
+  test("headings keep their authored case (override reveal's uppercase)", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    expect(html).toMatch(/\.reveal h1[^{]*\{[^}]*text-transform:\s*none/i);
+  }, 30_000);
+
   test("imago.scss carries Quarto layer markers (round-trip compatibility)", async () => {
     const scss = await readFile(resolve(DEMO, "assets/imago.scss"), "utf8");
     expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
@@ -445,6 +463,59 @@ describe("resolveDeclaredPath", () => {
   test("exact match preferred over basename", () => {
     const t = [...tree, "assets/dark.scss"];
     expect(resolveDeclaredPath("themes/dark.scss", t)).toBe("themes/dark.scss");
+  });
+});
+
+describe("file tree buildTree", () => {
+  test("empty folder (only .placeholder) still appears as a directory", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree(["myfolder/.placeholder"]);
+    const folder = root.children.get("myfolder");
+    expect(folder?.isDir).toBe(true);
+    expect(folder?.children.size).toBe(0); // placeholder hidden, folder kept
+  });
+
+  test("root dotfile markers are hidden entirely", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree([".seeded", ".bundled-themes", "demos/slide.qmd"]);
+    expect(root.children.has(".seeded")).toBe(false);
+    expect(root.children.has(".bundled-themes")).toBe(false);
+    expect(root.children.has("demos")).toBe(true);
+  });
+
+  test("nested files keep both folder and file nodes", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree(["assets/theme.scss"]);
+    const a = root.children.get("assets");
+    expect(a?.isDir).toBe(true);
+    expect(a?.children.get("theme.scss")?.isDir).toBe(false);
+  });
+
+  test("folder with a real file and a placeholder shows only the file", async () => {
+    const { buildTree } = await import("../src/ui/file-tree");
+    const root = buildTree(["demos/.placeholder", "demos/slide.qmd"]);
+    const d = root.children.get("demos");
+    expect([...d!.children.keys()]).toEqual(["slide.qmd"]);
+  });
+});
+
+describe("rebaseChildPath", () => {
+  test("grafts the sub-path onto the new folder", () => {
+    expect(rebaseChildPath("a", "b/c", "a/x/y.qmd")).toBe("b/c/x/y.qmd");
+  });
+
+  test("moving a root file's folder (single segment)", () => {
+    expect(rebaseChildPath("demos", "archive/demos", "demos/slide.qmd")).toBe(
+      "archive/demos/slide.qmd",
+    );
+  });
+
+  test("leaves a path that isn't under oldDir untouched", () => {
+    expect(rebaseChildPath("demos", "archive", "assets/theme.scss")).toBe("assets/theme.scss");
+  });
+
+  test("does not treat a sibling prefix as a child (demos vs demos-old)", () => {
+    expect(rebaseChildPath("demos", "archive", "demos-old/slide.qmd")).toBe("demos-old/slide.qmd");
   });
 });
 

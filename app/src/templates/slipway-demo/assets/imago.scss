@@ -64,6 +64,32 @@ $presentation-menu-color: $imago-grey;
 
 /*-- scss:rules --*/
 
+// Default body text colour. The `$body-color` default above only takes
+// effect inside Quarto's reveal template; Slipway compiles this SCSS
+// standalone, so without an explicit rule the text falls through to
+// reveal.js's white-theme default (#222). Set it here so default (and
+// `.light`) slides use imago-grey; `.dark` overrides to white below.
+.reveal {
+  color: $imago-grey;
+}
+
+// H1 (section / title slides). reveal.js's white base sets this to 2.5em,
+// which is oversized for Imago; bring it down. Tweak the value to taste.
+.reveal h1 {
+  font-size: 1.8em;
+}
+
+// Don't shout. reveal.js's white base uppercases every heading
+// (text-transform: uppercase); keep headings in their authored case.
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4,
+.reveal h5,
+.reveal h6 {
+  text-transform: none;
+}
+
 // Progress bar styling
 .reveal .progress {
   background: rgba($orange, 0.2);

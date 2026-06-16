@@ -36,6 +36,7 @@ import {
   writeText,
 } from "./storage/storage";
 import { readFileBytes, saveImageToAssets } from "./core/image-insert";
+import { rebaseChildPath } from "./core/path-resolve";
 
 const AUTOSAVE_MS = 2_000;
 
@@ -197,25 +198,49 @@ async function main(): Promise<void> {
 
   // ---- File tree wiring ----------------------------------------------------
 
+  // Move/rename a single file in storage and keep in-memory state in sync: its
+  // open editor tab (if any) and the active-editor / active-deck pointers.
+  async function moveOne(from: string, to: string): Promise<void> {
+    const open = opens.get(from);
+    if (open) await flushAutosave(open);
+    await rename(from, to);
+    if (open) {
+      opens.delete(from);
+      open.path = to;
+      opens.set(to, open);
+      open.panel.api.setTitle(to);
+    }
+    if (getActiveEditor() === from) setActiveEditor(to);
+    if (getActiveQmd() === from) setActiveQmd(to);
+  }
+
   const fileTree = createFileTree(filesContainer, {
     onOpen: (path) => void openFile(path),
     onRename: async (oldPath, newPath) => {
       try {
-        const open = opens.get(oldPath);
-        if (open) await flushAutosave(open);
-        await rename(oldPath, newPath);
-        if (open) {
-          opens.delete(oldPath);
-          open.path = newPath;
-          opens.set(newPath, open);
-          open.panel.api.setTitle(newPath);
+        // A file has an exact entry; a "folder" is only an implicit prefix
+        // over its descendants, so moving one means re-keying every child.
+        if (await exists(oldPath)) {
+          await moveOne(oldPath, newPath);
+          await refreshTree();
+          layout.setStatus(`Moved → ${newPath}`, "ok");
+          return;
         }
-        if (getActiveEditor() === oldPath) setActiveEditor(newPath);
-        if (getActiveQmd() === oldPath) setActiveQmd(newPath);
+        const children = await listFiles(oldPath + "/");
+        if (children.length === 0) {
+          layout.setStatus(`Nothing to move at ${oldPath}`, "warn");
+          return;
+        }
+        // Pre-check collisions across the whole subtree before touching anything.
+        const moves = children.map((c) => [c, rebaseChildPath(oldPath, newPath, c)] as const);
+        for (const [, dest] of moves) {
+          if (await exists(dest)) throw new Error(`Target already exists: ${dest}`);
+        }
+        for (const [src, dest] of moves) await moveOne(src, dest);
         await refreshTree();
-        layout.setStatus(`Renamed → ${newPath}`, "ok");
+        layout.setStatus(`Moved ${moves.length} files → ${newPath}/`, "ok");
       } catch (e) {
-        layout.setStatus(`Rename failed: ${msgOf(e)}`, "error");
+        layout.setStatus(`Move failed: ${msgOf(e)}`, "error");
       }
     },
     onDelete: async (path) => {
@@ -364,22 +389,22 @@ async function main(): Promise<void> {
   }
 
   async function refreshTree(): Promise<void> {
-    const all = await listFiles();
-    fileTree.refresh(
-      all.filter((p) => {
-        const segments = p.split("/");
-        return !segments[segments.length - 1].startsWith(".");
-      }),
-    );
+    // Pass the full list; buildTree hides dot-prefixed leaves (folder
+    // .placeholder stubs, .seeded / .bundled-themes markers) while keeping the
+    // directories they establish — so empty folders still show up.
+    fileTree.refresh(await listFiles());
     fileTree.setActive(getActiveEditor());
   }
 
   await refreshTree();
 
-  // Open the first .qmd at boot so the user lands in a familiar place.
+  // Open a deck at boot so the user lands in a familiar place. Prefer the
+  // getting-started deck (slide.qmd, wherever it lives) over whatever sorts
+  // first alphabetically — e.g. demos/imago-showcase.qmd would otherwise win.
   const initialQmds = await listQmds();
-  if (initialQmds[0]) {
-    await openFile(initialQmds[0]);
+  const initialQmd = initialQmds.find((p) => p.split("/").pop() === "slide.qmd") ?? initialQmds[0];
+  if (initialQmd) {
+    await openFile(initialQmd);
   } else {
     layout.setStatus("No .qmd files in project — import a zip or create one", "warn");
   }

@@ -36,3 +36,17 @@ export function resolveDeclaredPath(declared: string, allPaths: string[]): strin
 function stripLeadingTraversal(p: string): string {
   return p.replace(/^(\.\.?\/)+/, "");
 }
+
+/**
+ * Recompute a descendant's path when its containing folder moves. Used by the
+ * file tree's move/rename action: moving folder `oldDir` → `newDir` re-keys
+ * every file under it. `child` must live under `oldDir` (i.e. start with
+ * `oldDir + "/"`); the segment after `oldDir` is grafted onto `newDir`.
+ *
+ *   rebaseChildPath("a", "b/c", "a/x/y.qmd") === "b/c/x/y.qmd"
+ */
+export function rebaseChildPath(oldDir: string, newDir: string, child: string): string {
+  const prefix = oldDir + "/";
+  if (!child.startsWith(prefix)) return child;
+  return newDir + "/" + child.slice(prefix.length);
+}
