@@ -656,6 +656,15 @@ New smoke assertions: Imago self-hosts (no `fonts.googleapis.com`, woff2 inlined
 
 Caveat (same shape as 32/33): seeding only runs on first launch, so existing installs with a `.seeded` marker won't gain `assets/imago.scss` / `assets/journal.scss` / the fonts automatically. They can clear the project and re-seed, or import the files manually. A re-seed / "add bundled theme" affordance is deferred. Note also that this is parity-of-rendering, not Quarto-var parity — same caveat recorded in Increment 32.
 
+### Increment 34.1: Top-up bundled themes for existing installs
+
+Increment 34 only delivered the bundled themes to *new* installs: `seedIfEmpty()` bails the moment the `.seeded` marker exists, so anyone who'd already opened Slipway would never receive `assets/imago.scss` / `assets/journal.scss` / the fonts. This closes that gap with a non-destructive top-up.
+
+- `seed.ts` gains `topUpBundledThemes()`, gated on a new `.bundled-themes` version marker. It writes only the bundled theme files that **don't already exist** (never overwrites a user's edited or same-named file), then stamps the marker. Idempotent — at most one missing-file pass per generation, so a file the user deletes stays deleted across reloads. The bundled file list (imago/journal SCSS + figtree/et-book licences + the `virtual:seed-fonts` binaries) is now shared via `writeMissingBundledFiles()`, used by both `seedIfEmpty()` (fresh installs, which also stamp the marker) and the top-up.
+- `main.ts` calls `topUpBundledThemes()` right after `seedIfEmpty()` when the install wasn't freshly seeded, and surfaces an "Added bundled themes (N files)" status when it writes anything.
+
+Net effect: a deployed update reaches every existing install on next load — the themes appear in the Files panel and `theme: assets/imago.scss` / `theme: assets/journal.scss` just work, with the user's own deck untouched. Bump `BUNDLED_VERSION` when shipping a future bundled theme to trigger another top-up pass. 41 tests (unchanged — seed.ts is IDB-backed and outside the node test harness), `tsc` clean, build green.
+
 -----
 
 ## Repo cleanup (deferred)

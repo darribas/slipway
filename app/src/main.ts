@@ -13,7 +13,7 @@ import { createFileTree } from "./ui/file-tree";
 import { getPandoc } from "./core/pandoc";
 import { renderDeck } from "./core/render";
 
-import { seedIfEmpty } from "./storage/seed";
+import { seedIfEmpty, topUpBundledThemes } from "./storage/seed";
 import {
   buildRenderInputs,
   getActiveEditor,
@@ -110,6 +110,14 @@ async function main(): Promise<void> {
   let wasSeeded = false;
   try {
     wasSeeded = await seedIfEmpty();
+    // Existing installs (seeded before a theme shipped) get the missing
+    // bundled themes + fonts topped up here, non-destructively.
+    if (!wasSeeded) {
+      const added = await topUpBundledThemes();
+      if (added.length > 0) {
+        layout.setStatus(`Added bundled themes (${added.length} files)`);
+      }
+    }
   } catch (e) {
     layout.setStatus(`Seed failed: ${msgOf(e)}`, "error");
     console.error("seed failed:", e);
