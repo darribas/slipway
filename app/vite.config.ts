@@ -133,6 +133,51 @@ function revealPrintCssPlugin(): Plugin {
   };
 }
 
+// Bundle the seed deck's binary font files (woff2/woff/ttf/otf under
+// src/templates/slipway-demo/assets/fonts/) into a virtual module as base64,
+// keyed by their project-relative path. seedIfEmpty() decodes these and writes
+// them into IDB so a first-run project ships with the Imago/Journal fonts in
+// place — no network fetch, works offline. The render pipeline then re-inlines
+// them as data URIs at render time (see inlineFontUrls).
+function seedFontsPlugin(): Plugin {
+  const VIRT_ID = "virtual:seed-fonts";
+  const RESOLVED = "\0" + VIRT_ID;
+  const seedRoot = resolve("src/templates/slipway-demo");
+  const fontsDir = resolve(seedRoot, "assets/fonts");
+  const FONT_RE = /\.(woff2|woff|ttf|otf)$/i;
+
+  function collect(dir: string, out: Map<string, string>): void {
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return; // no fonts dir yet — emit an empty map
+    }
+    for (const name of entries) {
+      const full = resolve(dir, name);
+      if (statSync(full).isDirectory()) {
+        collect(full, out);
+      } else if (FONT_RE.test(name)) {
+        const rel = full.slice(seedRoot.length + 1).split("\\").join("/");
+        out.set(rel, readFileSync(full).toString("base64"));
+      }
+    }
+  }
+
+  function buildModule(): string {
+    const map = new Map<string, string>();
+    collect(fontsDir, map);
+    const obj = Object.fromEntries(map);
+    return `export default ${JSON.stringify(obj)};\n`;
+  }
+
+  return {
+    name: "slipway:seed-fonts",
+    resolveId(id) { return id === VIRT_ID ? RESOLVED : null; },
+    load(id) { return id === RESOLVED ? buildModule() : null; },
+  };
+}
+
 export default defineConfig({
   // Relative base so the built app works at any path (GitHub Pages, /slipway/, etc).
   base: "./",
@@ -140,6 +185,7 @@ export default defineConfig({
     pandocWasmPlugin(),
     katexInlinePlugin(),
     revealPrintCssPlugin(),
+    seedFontsPlugin(),
     VitePWA({
       // Service worker is registered by the virtual module imported in main.ts.
       // "prompt" fires onNeedRefresh when a new SW is waiting, giving the app

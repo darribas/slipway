@@ -639,6 +639,23 @@ Two distinct problems shared the same surface:
 
 Same caveat as the increment-32 fix: existing users with a pre-rename project in IDB still have `_snippet.md` on disk and `{{< include _snippet.md >}}` in their `slide.qmd`. Slipway's basename lookup still finds the file (so the in-app render now works for them too — the wire-up fix alone unblocks them), but exporting and running `quarto render` would still warn. A one-shot migration to rename old seed artifacts is deferred; for now, affected users can clear the project and re-seed, or hand-rename in the Files panel.
 
+### Increment 34: Bundled Imago + Journal themes with self-hosted fonts
+
+The two real-world themes Slipway exists to author — Imago and Journal — both pulled their typefaces from the network. Imago's `imago.scss` did `@import url('https://fonts.googleapis.com/css2?family=Figtree…')`; the Journal theme referenced `et-book/…` font files by relative path. Neither works in Slipway's preview: the compiled theme is inlined into a **null-origin sandboxed `srcdoc` iframe**, where both CDN `@import` and relative `url()` silently fail to resolve — the same constraint that already forces image and KaTeX-font inlining. So a user couldn't just write `theme: assets/imago.scss` and get going.
+
+Fix bundles both themes, fonts and all, into the seed project and adds a font-inlining render pass:
+
+- **`inlineFontUrls(css, fontUris)`** (`core/inline-assets.ts`): rewrites every `url(…woff2|woff|ttf|otf)` in the compiled theme CSS to a base64 `data:` URI, matched by font-file basename. Mirrors the existing image inlining. `render.ts` now sorts binary assets into images (→ markdown) and fonts (→ theme CSS), and runs this pass before `inlineThemeCss`. `buildRenderInputs()` collects font files into the assets map alongside images.
+- **Imago** (`assets/imago.scss`): the canonical Imago theme, byte-for-byte except the Google-Fonts `@import` is replaced with four self-hosted `@font-face` blocks pointing at the bundled Figtree variable woff2 (latin + latin-ext, normal + italic; SIL OFL 1.1, ~62 KB total). `darken()`/`lighten()` and everything else left intact for exact `quarto render` fidelity.
+- **Journal** (`assets/journal.scss`): the user's Journal theme, with ET Book (MIT) self-hosted under `fonts/et-book/`. The upstream `@font-face` listed eot/woff/ttf/svg fallbacks per face; trimmed to **woff only** (4 faces, ~177 KB) since woff is universally supported and the others would just bloat the inlined deck.
+- **Fonts ship in the bundle.** A new `seedFontsPlugin` (`vite.config.ts`) base64-encodes everything under `src/templates/slipway-demo/assets/fonts/` into a `virtual:seed-fonts` module; `seedIfEmpty()` decodes and writes the woff/woff2 files (plus the OFL/MIT licence texts) into IDB on first run. No network fetch — works offline, first run included.
+
+**Quarto round-trip preserved** (the explicit ask): both `.scss` files keep their `/*-- scss:defaults --*/` / `/*-- scss:rules --*/` layer markers, and the `@font-face` paths are relative to the stylesheet (`fonts/figtree/…`, `fonts/et-book/…`), so an exported project resolves the bundled fonts on disk under `quarto render` offline and renders identically in either tool. Slipway only swaps those same relative paths for data URIs at preview time.
+
+New smoke assertions: Imago self-hosts (no `fonts.googleapis.com`, woff2 inlined as data URIs, no surviving relative `fonts/` URL), Journal inlines ET Book woff and carries no eot/ttf/svg, layer markers present in both, plus `inlineFontUrls` unit tests. 41 tests, `tsc` clean, production build green.
+
+Caveat (same shape as 32/33): seeding only runs on first launch, so existing installs with a `.seeded` marker won't gain `assets/imago.scss` / `assets/journal.scss` / the fonts automatically. They can clear the project and re-seed, or import the files manually. A re-seed / "add bundled theme" affordance is deferred. Note also that this is parity-of-rendering, not Quarto-var parity — same caveat recorded in Increment 32.
+
 -----
 
 ## Repo cleanup (deferred)

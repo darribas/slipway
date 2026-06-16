@@ -105,6 +105,31 @@ export function inlineThemeCss(html: string, css: string): string {
 }
 
 /**
+ * Rewrite `url(...)` references inside compiled theme CSS to base64 data URIs.
+ *
+ * Theme stylesheets self-host fonts with `@font-face { src: url('fonts/x.woff2') }`.
+ * The compiled CSS is inlined into the deck as a <style> block that runs inside
+ * the sandboxed srcdoc iframe (null origin), where relative URLs don't resolve —
+ * exactly the same constraint that forces image and KaTeX-font inlining. This
+ * pass swaps every `url()` whose basename matches a known font asset for a
+ * `data:` URI so the typeface actually loads offline.
+ *
+ * `fontUris` is keyed by font-file basename (e.g. "figtree-latin-wght-normal.woff2").
+ * References that don't match a known asset are left untouched.
+ */
+export function inlineFontUrls(css: string, fontUris: Map<string, string>): string {
+  if (!css || fontUris.size === 0) return css;
+  return css.replace(
+    /url\(\s*(['"]?)([^'")]+\.(?:woff2|woff|ttf|otf))\1\s*\)/gi,
+    (match, _quote: string, ref: string) => {
+      const basename = ref.split("/").pop() ?? ref;
+      const uri = fontUris.get(basename);
+      return uri ? `url(${uri})` : match;
+    },
+  );
+}
+
+/**
  * Replace the two CDN KaTeX tags pandoc emits with fully self-contained
  * inline blocks. Pandoc uses `@latest` which resolves unpredictably and
  * fails entirely when offline; this pins to the bundled version and

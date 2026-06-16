@@ -99,10 +99,13 @@ export async function buildRenderInputs(qmdPath: string): Promise<RenderInputs> 
   if (!bibPath) bibPath = pickFirst(all, (p) => p.toLowerCase().endsWith(".bib"));
   const bib = bibPath ? await readText(bibPath) : null;
 
+  // Binary assets the renderer inlines as data URIs: images (rewritten into
+  // the markdown) and fonts (rewritten into the compiled theme CSS). Both are
+  // keyed by basename to match the renderer's lookup.
   const assets = new Map<string, Uint8Array>();
   for (const p of all) {
     const ext = p.split(".").pop()?.toLowerCase() ?? "";
-    if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext)) {
+    if (["png", "jpg", "jpeg", "gif", "webp", "svg", "woff2", "woff", "ttf", "otf"].includes(ext)) {
       const basename = p.split("/").pop()!;
       assets.set(basename, await readBytes(p));
     }

@@ -27,6 +27,7 @@ import type { PandocInstance, RenderInputs } from "../src/core/types";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEMO    = resolve(HERE, "../src/templates/slipway-demo");
 const IMAGO   = resolve(HERE, "fixtures/imago-workshop");
+const FIGTREE = resolve(DEMO, "assets/fonts/figtree");
 
 async function loadDemoInputs(): Promise<RenderInputs> {
   const [qmd, scss, bib, snippet] = await Promise.all([
@@ -58,6 +59,57 @@ async function loadImagoInputs(): Promise<RenderInputs> {
     stylesheetIsPrecompiled: false,
     bib,
     assets: new Map([["attention_paper.png", new Uint8Array(png)]]),
+    includes: new Map(),
+  };
+}
+
+// The seeded Imago theme: self-hosted Figtree fonts referenced from
+// assets/imago.scss. Mirrors what buildRenderInputs() assembles at runtime —
+// font files keyed by basename in the assets map.
+async function loadSeededImagoInputs(): Promise<RenderInputs> {
+  const fontFiles = [
+    "figtree-latin-wght-normal.woff2",
+    "figtree-latin-wght-italic.woff2",
+    "figtree-latin-ext-wght-normal.woff2",
+    "figtree-latin-ext-wght-italic.woff2",
+  ];
+  const [scss, ...fonts] = await Promise.all([
+    readFile(resolve(DEMO, "assets/imago.scss"), "utf8"),
+    ...fontFiles.map((f) => readFile(resolve(FIGTREE, f))),
+  ]);
+  const assets = new Map<string, Uint8Array>();
+  fontFiles.forEach((name, i) => assets.set(name, new Uint8Array(fonts[i])));
+  return {
+    qmd: "---\ntitle: Imago probe\n---\n\n# Heading {.dark}\n\nBody text in [Figtree]{.orange}.\n",
+    stylesheet: scss,
+    stylesheetIsPrecompiled: false,
+    bib: null,
+    assets,
+    includes: new Map(),
+  };
+}
+
+// The seeded Journal theme: self-hosted ET Book (woff) referenced from
+// assets/journal.scss.
+async function loadSeededJournalInputs(): Promise<RenderInputs> {
+  const ET = resolve(DEMO, "assets/fonts/et-book");
+  const fontPaths: Record<string, string> = {
+    "et-book-roman-line-figures.woff": "et-book-roman-line-figures/et-book-roman-line-figures.woff",
+    "et-book-display-italic-old-style-figures.woff": "et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.woff",
+    "et-book-bold-line-figures.woff": "et-book-bold-line-figures/et-book-bold-line-figures.woff",
+    "et-book-roman-old-style-figures.woff": "et-book-roman-old-style-figures/et-book-roman-old-style-figures.woff",
+  };
+  const scss = await readFile(resolve(DEMO, "assets/journal.scss"), "utf8");
+  const assets = new Map<string, Uint8Array>();
+  for (const [basename, rel] of Object.entries(fontPaths)) {
+    assets.set(basename, new Uint8Array(await readFile(resolve(ET, rel))));
+  }
+  return {
+    qmd: "---\ntitle: Journal probe\n---\n\n# A serif heading\n\nBody text in ET Book.\n",
+    stylesheet: scss,
+    stylesheetIsPrecompiled: false,
+    bib: null,
+    assets,
     includes: new Map(),
   };
 }
@@ -207,6 +259,85 @@ describe("imago-workshop deck (pipeline regression)", () => {
     expect(html).toMatch(/class="[^"]*\bdark\b/);
     expect(html).toMatch(/class="[^"]*\bhlg\b/);
   }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
+// Seeded Imago theme — self-hosted fonts inlined offline
+// ---------------------------------------------------------------------------
+
+describe("seeded Imago theme", () => {
+  test("self-hosts Figtree — no Google Fonts @import survives", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    expect(html).not.toMatch(/fonts\.googleapis\.com/);
+    expect(html).toContain("@font-face");
+    expect(html).toContain("Figtree");
+  }, 30_000);
+
+  test("Figtree woff2 files are inlined as data URIs — no relative font URLs remain", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededImagoInputs());
+    // The compiled theme is inlined into a <style> in the null-origin iframe,
+    // so every @font-face src must be a data URI (relative fonts/ paths can't resolve).
+    expect(html).not.toMatch(/url\(['"]?fonts\/figtree/);
+    expect(html).toMatch(/url\(data:font\/woff2;base64,/);
+  }, 30_000);
+
+  test("imago.scss carries Quarto layer markers (round-trip compatibility)", async () => {
+    const scss = await readFile(resolve(DEMO, "assets/imago.scss"), "utf8");
+    expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
+    expect(scss).toMatch(/\/\*--\s*scss:rules\s*--\*\//);
+    // @font-face must use a path relative to the stylesheet so `quarto render`
+    // resolves the bundled fonts on disk offline (no absolute / CDN URL).
+    expect(scss).toMatch(/url\('fonts\/figtree\/figtree-[\w-]+\.woff2'\)/);
+    expect(scss).not.toMatch(/fonts\.googleapis\.com/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seeded Journal theme — self-hosted ET Book inlined offline
+// ---------------------------------------------------------------------------
+
+describe("seeded Journal theme", () => {
+  test("ET Book woff files are inlined as data URIs — no relative font URLs remain", async () => {
+    const { html } = await renderDeck(pandoc, await loadSeededJournalInputs());
+    expect(html).not.toMatch(/url\(["']?fonts\/et-book/);
+    expect(html).toMatch(/url\(data:font\/woff;base64,/);
+    expect(html).toContain("et-book");
+  }, 30_000);
+
+  test("journal.scss carries Quarto layer markers and woff-only @font-face", async () => {
+    const scss = await readFile(resolve(DEMO, "assets/journal.scss"), "utf8");
+    expect(scss).toMatch(/\/\*--\s*scss:defaults\s*--\*\//);
+    expect(scss).toMatch(/\/\*--\s*scss:rules\s*--\*\//);
+    expect(scss).toMatch(/url\("fonts\/et-book\/[\w/-]+\.woff"\)/);
+    // Trimmed: no eot/ttf/svg fallbacks should remain to bloat the deck.
+    expect(scss).not.toMatch(/\.(eot|ttf|svg)["?#]/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Font-URL inlining (unit)
+// ---------------------------------------------------------------------------
+
+describe("inlineFontUrls", () => {
+  test("rewrites matching url() refs to data URIs by basename", async () => {
+    const { inlineFontUrls } = await import("../src/core/inline-assets");
+    const css = `@font-face { src: url('fonts/figtree/x.woff2') format('woff2'); }`;
+    const out = inlineFontUrls(css, new Map([["x.woff2", "data:font/woff2;base64,AAA"]]));
+    expect(out).toContain("url(data:font/woff2;base64,AAA)");
+    expect(out).not.toContain("fonts/figtree/x.woff2");
+  });
+
+  test("leaves unknown url() refs untouched", async () => {
+    const { inlineFontUrls } = await import("../src/core/inline-assets");
+    const css = `@font-face { src: url('fonts/other.woff2'); }`;
+    expect(inlineFontUrls(css, new Map([["x.woff2", "data:font/woff2;base64,AAA"]]))).toBe(css);
+  });
+
+  test("no-op when there are no font assets", async () => {
+    const { inlineFontUrls } = await import("../src/core/inline-assets");
+    const css = `.reveal { color: red; }`;
+    expect(inlineFontUrls(css, new Map())).toBe(css);
+  });
 });
 
 // ---------------------------------------------------------------------------

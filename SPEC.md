@@ -179,7 +179,7 @@ Service Worker + offline, Web App Manifest, PDF export, presenter view, plugin s
 ## Open items
 
 - **App name** and icon
-- **Journal theme spec**: pending — share the SCSS when ready
+- ~~**Journal theme spec**: pending — share the SCSS when ready~~ — done (Increment 34): Imago and Journal both bundled into the seed project with self-hosted fonts (Figtree OFL / ET Book MIT), selectable via `theme: assets/imago.scss` or `theme: assets/journal.scss`.
 - **Quarto extension inventory**: list of extensions your current decks depend on, to identify any load-bearing Lua filters that would block faithful reproduction
 - **pandoc-crossref WASM**: needs investigation for cross-reference support
 
