@@ -25,6 +25,9 @@ export interface FileTreeCallbacks {
 export interface FileTreeHandle {
   refresh: (paths: string[]) => void;
   setActive: (path: string | null) => void;
+  /** Expand the folders leading to `path`, scroll it into view, and flash it.
+   *  Used after adding a file so it's visible even if its folder was collapsed. */
+  reveal: (path: string) => void;
 }
 
 export interface TreeNode {
@@ -296,6 +299,18 @@ export function createFileTree(parent: HTMLElement, cb: FileTreeCallbacks): File
       activePath = path;
       if (path) expandAncestors(path);
       render();
+    },
+    reveal: (path) => {
+      // Expand the containing folders (a fresh image lands in assets/, which is
+      // collapsed unless the active file lives there) and surface the new row.
+      expandAncestors(path);
+      render();
+      const row = body.querySelector<HTMLElement>(`.ft-row[data-path="${CSS.escape(path)}"]`);
+      if (row) {
+        row.scrollIntoView({ block: "nearest" });
+        row.classList.add("ft-flash");
+        setTimeout(() => row.classList.remove("ft-flash"), 1200);
+      }
     },
   };
 

@@ -699,6 +699,20 @@ Fix moves the hiding into `buildTree`: a dot-prefixed leaf (the `.placeholder`, 
 
 Default (un-classed) Imago slides rendered with reveal.js's white-theme text colour (`#222`) instead of imago-grey. The theme set `$body-color: $imago-grey`, but that variable only feeds Quarto's reveal template — Slipway compiles the SCSS standalone with Dart Sass, so the assignment emitted no CSS and the colour fell through to the white base; only the explicit `.slide.light` / `.dark` rules set a colour. Added an explicit `.reveal { color: $imago-grey; }` rule (which `.dark` still overrides to white), so default and light slides use imago-grey in both Slipway and Quarto. New smoke assertion checks the compiled `.reveal` colour rule is present. 50 tests.
 
+### Increment 34.6: Imago H1 sized down
+
+Imago set no explicit H1 size, so section/title headings inherited reveal.js's oversized `2.5em`. Added `.reveal h1 { font-size: 1.8em; }` (easy to tweak in-app). New smoke assertion. 51 tests.
+
+### Increment 34.7: Imago headings keep their authored case
+
+reveal.js's white base uppercases every heading via `--r-heading-text-transform: uppercase`; Imago didn't override it, so headings were auto-capitalised. Added a scoped `.reveal h1, … h6 { text-transform: none; }` rule, which wins by source order (the theme is inlined after the base). New smoke assertion. 52 tests.
+
+### Increment 34.8: Reveal newly-added images in the file tree
+
+Adding an image — via **+ Image**, drag-drop, or editor paste/drop — appeared to do nothing. The file *was* written to `assets/` correctly (all three paths funnel through `handleImageFile` → `saveImageToAssets` → `writeBytes`), but the tree only auto-expands folders along the *active* file's path, so a fresh image dropped into a collapsed `assets/` (the active deck lives at the root or under `demos/`) was saved-but-hidden — reading as "nothing gets added to the assets folder."
+
+Fix adds a `reveal(path)` method to the file-tree handle: it expands the path's ancestor folders, re-renders, scrolls the row into view, and briefly flashes it (`.ft-flash` keyframe). `handleImageFile()` and the `onDropFiles` handler call it after `refreshTree()`, so a new file is always surfaced (and the flash makes clear which one). 52 tests, `tsc` clean, build green. (Diagnosed by reading the expand logic against the write path; the live UI wasn't run — no browser/DOM in this environment.)
+
 -----
 
 ## Repo cleanup (deferred)
