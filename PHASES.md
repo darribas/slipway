@@ -713,6 +713,16 @@ Adding an image — via **+ Image**, drag-drop, or editor paste/drop — appeare
 
 Fix adds a `reveal(path)` method to the file-tree handle: it expands the path's ancestor folders, re-renders, scrolls the row into view, and briefly flashes it (`.ft-flash` keyframe). `handleImageFile()` and the `onDropFiles` handler call it after `refreshTree()`, so a new file is always surfaced (and the flash makes clear which one). 52 tests, `tsc` clean, build green. (Diagnosed by reading the expand logic against the write path; the live UI wasn't run — no browser/DOM in this environment.)
 
+### Increment 34.9: Self-healing export for bundled-theme fonts (issue #37)
+
+Reported via issue #37: exporting a project that uses the Imago or Journal theme produced a zip that `quarto render` couldn't typeset offline because the `@font-face` files weren't in it. A freshly-seeded install *does* have the woff/woff2 files in IDB (Increment 34 + 34.1 add them to every project), so `exportZip()` was already including them in the normal path — the bug surfaced when fonts weren't in IDB at export time. Two routes lead there: importing a foreign zip via **Import** (which `clearRoot()`s and writes only the imported entries, never the bundled fonts), or the user deleting a font by mistake from the file tree. In either case, `assets/imago.scss` (or `assets/journal.scss`) ends up in the export but the woff/woff2 files it references don't, and `quarto render` falls back to the browser default font.
+
+Fix makes the export self-healing: at zip time, for any bundled-theme SCSS that's present in the project, `exportZip()` adds any of its required font / licence files that aren't already in the zip. The user's own edits to the SCSS are preserved (we only add the *accompanying* assets, never overwrite the SCSS); IDB is untouched (only the export sees the augmentation). A new `src/storage/bundled-themes.ts` catalog centralises the per-theme metadata (SCSS path + asset paths, each with a lazy reader) so both `seed.ts` and `zip.ts` share one source of truth — `writeMissingBundledFiles()` in `seed.ts` now iterates `allBundledFiles()`, so the seed and the export-side self-heal can never drift.
+
+Tests: catalog assertions (Imago lists Figtree fonts + OFL; Journal lists ET Book fonts + licence; the two themes' asset paths don't overlap so a project using one isn't dragged into the other's bundle) plus two integration tests over a fake IndexedDB — a project with `assets/imago.scss` but no fonts exports a zip containing the four Figtree woff2 files and OFL.txt without touching IDB or pulling in ET Book; a project with neither bundled SCSS exports without any bundled fonts at all. `fake-indexeddb` added as a dev dep for the integration coverage. 57 tests, `tsc` clean, build green.
+
+The vitest run currently can't validate the SCSS content of the bundled catalog (Vite's css plugin compiles `.scss?raw` to empty CSS before the raw query plugin sees it — a long-standing Vite quirk), but the production build is verified by a `grep` of `dist/assets/index-*.js` for each SCSS file's signature strings ("Imago Color Palette", "Slipway starter theme", "Tufte's style"). The seed pipeline's behaviour was already production-correct before this increment; the catalog refactor doesn't change which strings end up in the bundle.
+
 -----
 
 ## Repo cleanup (deferred)
