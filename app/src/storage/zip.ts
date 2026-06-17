@@ -1,4 +1,5 @@
 import { unzipSync, zipSync, strFromU8 } from "fflate";
+import { BUNDLED_THEMES } from "./bundled-themes";
 import { listFiles, readBytes, writeBytes, clearRoot } from "./storage";
 
 const TEXT_EXTENSIONS = new Set([
@@ -52,12 +53,25 @@ function sharedTopLevelDir(names: string[]): string {
  * If `renderedHtml` is supplied it is included as `rendered/index.html` — a
  * fully self-contained file (all assets inlined) that opens directly in any
  * browser without a server.
+ *
+ * Self-heals bundled themes: if the project keeps `assets/imago.scss` or
+ * `assets/journal.scss` but is missing any of the font / licence files those
+ * SCSS files reference (a deck imported from elsewhere without them, or the
+ * user inadvertently deleted them), the bundled originals are added straight
+ * into the zip so an exported project always renders under `quarto render`.
+ * IDB is left untouched — only the export sees the augmentation.
  */
 export async function exportZip(renderedHtml?: string | null): Promise<Blob> {
   const paths = await listFiles();
   const entries: Record<string, Uint8Array> = {};
   for (const path of paths) {
     entries[path] = await readBytes(path);
+  }
+  for (const theme of BUNDLED_THEMES) {
+    if (!(theme.scss.path in entries)) continue;
+    for (const asset of theme.assets) {
+      if (!(asset.path in entries)) entries[asset.path] = asset.read();
+    }
   }
   if (renderedHtml) {
     entries["rendered/index.html"] = new TextEncoder().encode(renderedHtml);
