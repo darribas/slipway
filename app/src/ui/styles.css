@@ -352,6 +352,13 @@ kbd {
 .slipway-file-tree .ft-row:hover { background: var(--bg-panel); }
 .slipway-file-tree .ft-row.ft-drag-over,
 .slipway-file-tree .ft-body.ft-drag-over { background: rgba(58, 74, 82, 0.08); outline: 2px dashed var(--accent); outline-offset: -2px; }
+/* Brief highlight on a freshly-added file so it's noticed even when its
+   folder was just expanded to reveal it. */
+.slipway-file-tree .ft-row.ft-flash { animation: ft-flash 1.2s ease-out; }
+@keyframes ft-flash {
+  from { background: var(--accent); }
+  to   { background: transparent; }
+}
 .slipway-file-tree .ft-row.active {
   background: rgba(58, 74, 82, 0.12);
   color: var(--accent);

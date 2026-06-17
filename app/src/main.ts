@@ -303,6 +303,7 @@ async function main(): Promise<void> {
         }
       }
       await refreshTree();
+      if (saved[0]) fileTree.reveal(saved[0]);
       if (errors.length) {
         layout.setStatus(`Saved ${saved.length}, failed: ${errors.join("; ")}`, "error");
       } else {
@@ -447,6 +448,7 @@ async function main(): Promise<void> {
       const bytes = await readFileBytes(file);
       const path = await saveImageToAssets(bytes, file.type || "image/png");
       await refreshTree();
+      fileTree.reveal(path);
       if (active) {
         active.handle.insertImageMarkdown(path);
         if (active.path.toLowerCase().endsWith(".qmd")) layout.setStale(true);
