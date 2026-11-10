@@ -5,13 +5,12 @@ import { registerSW } from "virtual:pwa-register";
 import { DockviewComponent, type IContentRenderer, type IDockviewPanel } from "dockview-core";
 
 import { mountLayout } from "./ui/layout";
-import { buildPrintVariant } from "./core/print";
+import { buildPrintVariant, rebaseChildPath, renderDeck } from "@slipway/core";
 import { createEditor, languageFor, type EditorHandle } from "./ui/editor";
 import { PreviewPane } from "./ui/preview";
 import { createFileTree } from "./ui/file-tree";
 
-import { getPandoc } from "./core/pandoc";
-import { renderDeck } from "./core/render";
+import { getPandoc } from "./pandoc";
 
 import { seedIfEmpty, topUpBundledThemes } from "./storage/seed";
 import {
@@ -35,8 +34,7 @@ import {
   writeBytes,
   writeText,
 } from "./storage/storage";
-import { readFileBytes, saveImageToAssets } from "./core/image-insert";
-import { rebaseChildPath } from "./core/path-resolve";
+import { readFileBytes, saveImageToAssets } from "./storage/image-insert";
 
 const AUTOSAVE_MS = 2_000;
 

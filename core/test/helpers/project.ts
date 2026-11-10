@@ -6,9 +6,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { extractDeclarations } from "../../src/core/frontmatter";
-import { resolveDeclaredPath } from "../../src/core/path-resolve";
-import type { RenderInputs } from "../../src/core/types";
+import { extractDeclarations, resolveDeclaredPath } from "../../src/index";
+import type { RenderInputs } from "../../src/index";
 
 const BINARY = ["png", "jpg", "jpeg", "gif", "webp", "svg", "woff2", "woff", "ttf", "otf"];
 

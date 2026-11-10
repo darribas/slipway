@@ -1,7 +1,8 @@
 // Golden-output test: every fixture deck must render to exactly the HTML
 // recorded in test/goldens/goldens.json. This is the guard for the Phase 4
-// extraction of the renderer into a shared core — the PWA, the CLI and the
-// VS Code extension must all produce the same bytes for the same deck.
+// shared core — the PWA, the CLI and the VS Code extension must all produce
+// the same bytes for the same deck, and each of them checks its own output
+// against this same goldens.json.
 //
 // The rendered HTML is several MB per deck (reveal.js + KaTeX fonts are
 // inlined), so the goldens are stored as SHA-256 + byte length rather than
@@ -19,21 +20,19 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, test } from "vitest";
-import { convert } from "pandoc-wasm";
 
-import { renderDeck } from "../src/core/render";
-import { buildPrintVariant } from "../src/core/print";
-import type { PandocInstance } from "../src/core/types";
+import { buildPrintVariant, renderDeck } from "../src/index";
+import { loadPandoc } from "./helpers/pandoc";
 import { loadProjectInputs } from "./helpers/project";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEMO = resolve(HERE, "../src/templates/slipway-demo");
+const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
 const IMAGO = resolve(HERE, "fixtures/imago-workshop");
 const GOLDENS = resolve(HERE, "goldens/goldens.json");
 const ACTUAL_DIR = resolve(HERE, "goldens/.actual");
 const UPDATE = !!process.env.UPDATE_GOLDENS;
 
-const pandoc: PandocInstance = { convert: convert as PandocInstance["convert"] };
+const pandoc = await loadPandoc();
 
 interface Golden { sha256: string; bytes: number }
 const recorded: Record<string, Golden> = existsSync(GOLDENS)

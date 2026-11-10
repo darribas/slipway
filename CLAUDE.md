@@ -13,6 +13,11 @@ frontmatter) → SCSS compile via Dart Sass → Quarto-style preprocessing →
 pandoc-wasm `--to revealjs --standalone --citeproc` → reveal.js HTML →
 sandboxed iframe preview. All in-browser.
 
+Since Phase 4 (issue #41) the renderer is a shared package, `core/`
+(`@slipway/core`), consumed by the PWA and — as Phase 4 progresses — by a
+`slipway` CLI (`cli/`) and a VS Code web extension (`vscode/`). All surfaces
+must render the same deck to the same HTML; `core/test/goldens/` guards that.
+
 The deployed app lives at <https://darribas.org/slipway/> (and
 <https://darribas.github.io/slipway/>), served via GitHub Pages from
 `app/dist/`, built by `.github/workflows/deploy.yml` on every push to `main`.
@@ -39,22 +44,39 @@ Commit messages also carry substantive context — `git log` is informative.
 
 ```
 SPEC.md, PHASES.md, LICENSE           project-level docs
-app/                                   the Vite project; everything else
-                                       lives under here
-  src/                                 TS sources
-    core/                              renderer (pandoc, sass, preprocess,
+core/                                  @slipway/core — the shared renderer.
+                                       No DOM, no Node built-ins, no fetch,
+                                       no bundler-specific imports.
+  src/                                 render, sass, preprocess,
                                        inline-assets, frontmatter,
-                                       path-resolve, image-insert)
+                                       path-resolve, print, host (global
+                                       fallbacks), pandoc-core.js (vendored
+                                       wasm glue), index.ts (public API)
+  src/generated/assets.ts              git-ignored; reveal.js + KaTeX + print
+                                       CSS as strings (scripts/gen-assets.mjs)
+  test/render.test.ts                  end-to-end render assertions
+  test/golden.test.ts, test/goldens/   byte-exact output hashes per deck
+  test/fixtures/imago-workshop/        secondary render fixture (test-only)
+app/                                   the PWA (Vite project)
+  src/                                 TS sources
+    pandoc.ts                          PWA's pandoc.wasm loader (fetch +
+                                       progress)
     storage/                           IDB-backed storage + project model
     ui/                                editor (CodeMirror 6 + vim), preview,
                                        file tree, Dockview layout
-    templates/slipway-demo/            seed deck
-  test/smoke.test.ts                   end-to-end render assertions
-  test/fixtures/imago-workshop/        secondary render fixture (test-only)
+    templates/slipway-demo/            seed deck (also core's main fixture)
+  test/app.test.ts                     storage / zip / file-tree tests + a
+                                       PWA-vs-core golden check
   scripts/render-icons.mjs             one-shot icon regenerator
   public/                              icon files + manifest.webmanifest
 .github/workflows/                     deploy.yml + ci.yml
 ```
+
+There is **no root npm workspace**. Each package has its own `package.json`
+and lockfile; consumers depend on core via `"@slipway/core": "file:../core"`
+(npm symlinks it) and bundle its TypeScript source themselves. A fresh
+checkout therefore needs `npm ci` in `core/` *and* in the package you're
+working on.
 
 ## Working conventions
 
@@ -64,18 +86,21 @@ app/                                   the Vite project; everything else
 - **One increment = one commit.** Small, focused, with a substantive commit
   message. The user has a strong preference for shipping each increment as
   its own merge to `main` rather than batching.
-- **Smoke test must stay green.** `cd app && npm test`. CI gates merges via
-  `.github/workflows/ci.yml`; deploy re-runs the test before publishing.
-  When you change the renderer, add an assertion to the smoke test that
-  locks the behaviour down.
+- **Tests must stay green.** `cd core && npm test` (renderer + goldens) and
+  `cd app && npm test`. CI gates merges via `.github/workflows/ci.yml`;
+  deploy re-runs the tests before publishing. When you change the renderer,
+  add an assertion to `core/test/render.test.ts` that locks the behaviour
+  down. If the change intentionally alters rendered HTML, re-record the
+  goldens (`cd core && UPDATE_GOLDENS=1 npm test`) in the same commit and
+  say why in the commit message.
 - **Append to PHASES.md** with an "### Increment N: …" block when shipping.
   Sub-letter the increment (4.1, 5a/b/d, 7a/b) when fixing follow-ups to
   earlier work.
-- **No npm commands at the repo root.** The root `.gitignore` blocks
+- **No npm commands at the repo root.** The root `.gitignore` blocks a root
   `node_modules/` / `package.json` / `package-lock.json` from being
   committed — this guard exists because shell cwd has reset on us before
-  and 23 000 lines of npm garbage ended up in a commit. Always run npm
-  from `app/`.
+  and 23 000 lines of npm garbage ended up in a commit. Run npm only from
+  inside a package directory (`core/`, `app/`, and later `cli/`, `vscode/`).
 
 ## Gotchas worth saving you time
 
@@ -92,13 +117,23 @@ app/                                   the Vite project; everything else
   the Phase 1 "Post-release fixes" section of `PHASES.md` for the full
   debugging story before suggesting OPFS again.
 - **Reveal.js + theme + KaTeX-config are inlined post-pandoc** in
-  `core/inline-assets.ts`. Pandoc emits `<link>`/`<script>` pointing at
+  `core/src/inline-assets.ts`. Pandoc emits `<link>`/`<script>` pointing at
   unpkg, and the deck wouldn't work offline (and our sandbox can't reach
   the CDN); we rewrite those refs. The deck's `format.revealjs.*` YAML
   options also reach reveal.js via a `Reveal.configure()` override script
   injected after init, because pandoc's template silently drops options
   set to boolean `false`. Don't break the override-script injection — there's
   a regression guard in the smoke test.
+- **`npm install` (fresh resolve) can crash** with `Cannot read properties
+  of null (reading 'edgesOut')` on npm 10.9 when vitest is in the tree. Use
+  `npm install --legacy-peer-deps` to update a lockfile; plain `npm ci`
+  from the committed lockfiles is unaffected.
+- **Pin anything that affects rendered bytes** (sass, yaml, reveal.js,
+  katex, pandoc-wasm) to exact versions in `core/package.json`; bumping
+  one changes the goldens.
+- **Don't import `.css` / `.scss` with `?raw` in code under test.** Vitest's
+  CSS plugin wins over `?raw` and yields an empty string (this hid empty
+  reveal stylesheets in the test renders until increment 4.0a).
 - **`pandoc.wasm` is 58 MB.** First load is heavy. The dev plugin in
   `vite.config.ts` serves it through middleware in dev and emits it as a
   hashed asset at build.

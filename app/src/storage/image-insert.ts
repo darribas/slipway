@@ -1,4 +1,4 @@
-import { writeBytes } from "../storage/storage";
+import { writeBytes } from "./storage";
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/png": "png",

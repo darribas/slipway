@@ -1,6 +1,5 @@
-import type { RenderInputs } from "../core/types";
-import { extractDeclarations } from "../core/frontmatter";
-import { resolveDeclaredPath } from "../core/path-resolve";
+import { extractDeclarations, resolveDeclaredPath } from "@slipway/core";
+import type { RenderInputs } from "@slipway/core";
 import { listFiles, readBytes, readText, writeText } from "./storage";
 
 /**

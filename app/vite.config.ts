@@ -137,5 +137,11 @@ export default defineConfig({
   worker: {
     format: "es",
   },
+  server: {
+    // @slipway/core is a `file:../core` dependency: npm symlinks it, Vite
+    // resolves the symlink to ../core/src, and the dev server refuses to
+    // serve files outside the project root unless they are allow-listed.
+    fs: { allow: [".", "../core"] },
+  },
   assetsInclude: ["**/*.qmd", "**/*.bib"],
 });

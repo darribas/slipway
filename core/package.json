@@ -1,0 +1,34 @@
+{
+  "name": "@slipway/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Slipway's renderer: .qmd → self-contained reveal.js HTML. Shared by the PWA, the VS Code extension and the CLI.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "gen-assets": "node scripts/gen-assets.mjs",
+    "pretypecheck": "npm run gen-assets",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run gen-assets",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2",
+    "sass": "1.99.0",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "katex": "0.16.47",
+    "pandoc-wasm": "1.0.1",
+    "reveal.js": "5.2.1",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "4.1.6"
+  }
+}

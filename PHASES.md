@@ -742,6 +742,22 @@ First step of the extraction, still entirely inside `app/`.
 
 62 tests (57 + 4 golden + 1 new), `tsc` clean, build green.
 
+### Increment 4.0b: Renderer moves to `core/` (`@slipway/core`)
+
+The renderer is now its own package, a sibling of `app/`, and the PWA consumes it as a dependency.
+
+**Layout.** `core/src/` holds `render`, `sass`, `preprocess`, `inline-assets`, `frontmatter`, `path-resolve`, `print`, `types`, the vendored `pandoc-core.js`, plus two new files: `index.ts` (the public API) and `host.ts`. `scripts/gen-assets.mjs`, the goldens, the `imago-workshop` fixture and the render assertions moved with it (`core/test/render.test.ts`, `core/test/golden.test.ts`). `app/src/core/` is gone: the PWA's fetch-with-progress pandoc loader is now `app/src/pandoc.ts` and `image-insert.ts` (storage-coupled, PWA-only) moved to `app/src/storage/`. The demo deck stays in `app/src/templates/slipway-demo/` (it is the PWA's seed) and core's tests read it from there.
+
+**No root workspace**, per the spec and the existing root `.gitignore` guard (now anchored to the root so package manifests elsewhere are tracked normally). `app` depends on `"@slipway/core": "file:../core"`; npm symlinks it and Vite bundles core's TypeScript source directly (`exports` → `./src/index.ts`). Consequences: a consumer needs `npm ci` in `core/` first (CI and deploy do this), and Vite's dev server needs `server.fs.allow` to include `../core` (verified: dev server serves `/@fs/…/core/src/*` with 200). `sass`, `yaml`, `katex` and `reveal.js` left `app/package.json` — they are core's now, and everything that affects rendered bytes is pinned to an exact version there (sass 1.99.0, yaml 2.9.0, reveal.js 5.2.1, katex 0.16.47, pandoc-wasm 1.0.1 — the versions the app lockfile already resolved to).
+
+**DOM-free by construction.** `core/tsconfig.json` uses `lib: ["ES2022"]` with `types: []` — no DOM lib, no Node types — so a stray `window`/`document`/`fetch`/`node:` reference fails `npm run typecheck`. To get there: `PandocInstance` takes files as `string | Uint8Array` instead of `Blob` (vendored `pandoc-core.js` gained a three-line `Uint8Array` branch in `addFile`, marked `Slipway:`), and `host.ts` provides `now()` (`performance.now()` → `Date.now()` fallback) and `base64Encode()` (host `btoa` when present, pure-JS encoder otherwise — a-Shell's `jsc` may lack `btoa`). A test checks the pure encoder against Node's for every tail length.
+
+**Tests.** Core: 54 (render assertions + 4 goldens + base64), now driving pandoc through core's own `createPandocInstance` with the wasm read from disk, rather than `pandoc-wasm`'s Node entry — i.e. the exact glue every surface uses. Goldens unchanged from 4.0a. App: 10 (bundled-theme catalog, zip self-heal, file tree) including a new one that renders the seed deck through the app's `@slipway/core` dependency and asserts the SHA-256 equals core's `demo-slide` golden — each surface will carry the same check. Production bundle re-verified (`dist/` still carries the seed SCSS signature strings; JS bundle 5.68 MB, same as before).
+
+**CI/deploy.** `ci.yml` has `core` and `app` jobs (both always run, so a core change always re-tests every consumer); `deploy.yml` installs and tests core before the app. `CLAUDE.md` layout and conventions updated.
+
+**Caught:** `npm install` crashes on a fresh resolve with npm 10.9.9 (`Cannot read properties of null (reading 'edgesOut')`, in arborist's peer-set loading for vitest — reproducible with a bare `vitest` dependency in an empty folder). `npm install --legacy-peer-deps` generates the lockfile; plain `npm ci` from it works. Noted in `CLAUDE.md`.
+
 -----
 
 ## Repo cleanup (deferred)

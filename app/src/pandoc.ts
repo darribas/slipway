@@ -1,6 +1,10 @@
-import { createPandocInstance } from "./pandoc-core.js";
+// The PWA's pandoc loader: fetch pandoc.wasm (58 MB) with download progress,
+// then hand the bytes to core's createPandocInstance. Each Slipway surface
+// loads the wasm its own way; only the instantiation glue is shared.
+
+import { createPandocInstance } from "@slipway/core";
+import type { PandocInstance } from "@slipway/core";
 import pandocWasmUrl from "virtual:pandoc-wasm-url";
-import type { PandocInstance } from "./types";
 
 export type { PandocInstance };
 
@@ -31,5 +35,5 @@ async function loadPandoc(onProgress?: (loaded: number, total: number) => void):
     wasm.set(c, offset);
     offset += c.length;
   }
-  return (await createPandocInstance(wasm.buffer)) as PandocInstance;
+  return await createPandocInstance(wasm.buffer);
 }

@@ -1,4 +1,6 @@
-/* Vendored verbatim from pandoc-wasm@1.0.1 (src/core.js), MIT licensed.
+/* Vendored from pandoc-wasm@1.0.1 (src/core.js), MIT licensed. One local
+   change: addFile() also accepts a Uint8Array (see "Slipway:" comment), so
+   callers in hosts without Blob can pass raw bytes.
    Copyright (c) Tweag I/O Limited, Johannes Wilm, and pandoc-wasm contributors.
    See https://github.com/pandoc/pandoc-wasm for the upstream source and
    https://github.com/pandoc/pandoc-wasm/blob/main/LICENSE for the licence.
@@ -76,11 +78,14 @@ export function createPandocInstance(wasmBinary) {
 
         // Helper function to add file to filesystem
         // Accepts either a Blob or a string
+        // Slipway: ...or a Uint8Array, used as-is.
         async function addFile(filename, data, readonly) {
             let uint8Array
             if (typeof data === "string") {
                 // Convert string to Uint8Array
                 uint8Array = new TextEncoder().encode(data)
+            } else if (data instanceof Uint8Array) {
+                uint8Array = data
             } else {
                 // Assume it's a Blob
                 const buffer = await data.arrayBuffer()

@@ -1,6 +1,13 @@
-# PR gate. Runs the smoke test + typecheck + production build on every
-# pull request targeting main, so a broken commit can't merge.
-# The deploy workflow runs the same steps on main itself before publishing.
+# PR gate. Runs every package's tests + typecheck (+ build) on every pull
+# request targeting main, so a broken commit can't merge. The deploy workflow
+# runs the same steps on main itself before publishing.
+#
+# The repo has no root npm workspace (see CLAUDE.md): each package is
+# installed on its own, and every consumer of @slipway/core (a `file:../core`
+# dependency, symlinked by npm) needs core's dependencies installed too.
+#
+# All jobs run on every PR — in particular a change under core/ always runs
+# every consumer's tests, because all surfaces must render identical HTML.
 
 name: CI
 
@@ -14,7 +21,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,13 +30,42 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: core/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Typecheck (no DOM, no Node types)
+        run: npm run typecheck
+        working-directory: core
+
+      - name: Render tests + goldens (vitest)
+        run: npm test
+        working-directory: core
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            app/package-lock.json
+
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
 
       - name: Install dependencies
         run: npm ci
         working-directory: app
 
-      - name: Smoke test (vitest)
+      - name: Test (vitest)
         run: npm test
         working-directory: app
 

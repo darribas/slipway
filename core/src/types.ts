@@ -27,19 +27,21 @@ export interface RenderResult {
   durationMs: number;
 }
 
-// Minimal interface for whatever drives pandoc. Lives in types.ts (rather
-// than pandoc.ts) so render.ts can be imported from a node-only test
-// context without pulling in the Vite-only virtual:pandoc-wasm-url module.
+// Minimal interface for whatever drives pandoc: each surface loads
+// pandoc.wasm its own way and hands the renderer one of these (normally the
+// result of createPandocInstance()). Input files are text or raw bytes; the
+// output maps hold host-specific values (Blobs in a browser) that the
+// renderer never reads, hence `unknown`.
 export interface PandocInstance {
   convert: (
     options: Record<string, unknown>,
     stdin: string | null,
-    files: Record<string, string | Blob>,
+    files: Record<string, string | Uint8Array>,
   ) => Promise<{
     stdout: string;
     stderr: string;
     warnings: unknown[];
-    files: Record<string, string | Blob>;
-    mediaFiles: Record<string, Blob>;
+    files: Record<string, unknown>;
+    mediaFiles: Record<string, unknown>;
   }>;
 }

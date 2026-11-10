@@ -23,7 +23,7 @@ import {
   revealThemeBlackCss as themeBlackCss,
   revealThemeWhiteCss as themeWhiteCss,
   revealZoomJs as zoomJs,
-} from "../generated/assets";
+} from "./generated/assets";
 
 type AssetKind = "css" | "js";
 interface Asset {

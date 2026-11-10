@@ -2,6 +2,7 @@ import { compileScss } from "./sass";
 import { preprocessDeck } from "./preprocess";
 import { extractDeclarations } from "./frontmatter";
 import { injectRevealConfigOverride, injectSandboxCompat, inlineFontUrls, inlineKatexAssets, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
+import { base64Encode, now } from "./host";
 import type { PandocInstance, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
@@ -26,19 +27,14 @@ function mimeFor(name: string): string {
 }
 
 function bytesToDataUri(bytes: Uint8Array, mime: string): string {
-  let bin = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
-  }
-  return `data:${mime};base64,${btoa(bin)}`;
+  return `data:${mime};base64,${base64Encode(bytes)}`;
 }
 
 export async function renderDeck(
   pandoc: PandocInstance,
   inputs: RenderInputs,
 ): Promise<RenderResult> {
-  const t0 = performance.now();
+  const t0 = now();
 
   // The stylesheet may be either Sass source (compile via Dart Sass) or
   // already-compiled CSS (use as-is). Empty string means no theme in the
@@ -69,7 +65,7 @@ export async function renderDeck(
 
   const { qmd } = preprocessDeck(inputs.qmd, { assetUris, includes: inputs.includes });
 
-  const pandocFiles: Record<string, string | Blob> = {};
+  const pandocFiles: Record<string, string | Uint8Array> = {};
   if (css) pandocFiles["theme.css"] = css;
   if (inputs.bib) pandocFiles["references.bib"] = inputs.bib;
 
@@ -118,6 +114,6 @@ export async function renderDeck(
     html,
     warnings,
     stderr: result.stderr,
-    durationMs: performance.now() - t0,
+    durationMs: now() - t0,
   };
 }

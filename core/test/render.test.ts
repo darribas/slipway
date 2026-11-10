@@ -1,13 +1,13 @@
-// Smoke tests for the render pipeline.
+// Render tests for @slipway/core.
 //
-// Primary suite: the slipway-demo template (the app's default seed deck,
-// bundled into the app). It exercises SCSS compilation, citations,
-// incremental lists, two-column layouts, math, code blocks, and reveal.js
-// config override — enough to catch any regression in the render pipeline
-// before it reaches main.
+// Primary suite: the slipway-demo template (the PWA's default seed deck,
+// which lives under app/src/templates/ and doubles as core's main fixture).
+// It exercises SCSS compilation, citations, incremental lists, two-column
+// layouts, math, code blocks, and reveal.js config override — enough to
+// catch any regression in the render pipeline before it reaches main.
 //
 // The imago-workshop deck under test/fixtures/ is a test-only fixture
-// (not shipped with the app) kept for a secondary round of assertions
+// (not shipped with any surface) kept for a secondary round of assertions
 // that cover features the demo deck doesn't (local PNG inlining, external
 // URLs left intact, Imago-specific class names).
 
@@ -16,16 +16,21 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
-import { convert } from "pandoc-wasm";
 
-import { renderDeck } from "../src/core/render";
-import { buildPrintVariant } from "../src/core/print";
-import { extractDeclarations } from "../src/core/frontmatter";
-import { resolveDeclaredPath, rebaseChildPath } from "../src/core/path-resolve";
-import type { PandocInstance, RenderInputs } from "../src/core/types";
+import {
+  buildPrintVariant,
+  extractDeclarations,
+  inlineFontUrls,
+  rebaseChildPath,
+  renderDeck,
+  resolveDeclaredPath,
+} from "../src/index";
+import type { RenderInputs } from "../src/index";
+import { base64Encode, base64EncodePure } from "../src/host";
+import { loadPandoc } from "./helpers/pandoc";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEMO    = resolve(HERE, "../src/templates/slipway-demo");
+const DEMO    = resolve(HERE, "../../app/src/templates/slipway-demo");
 const IMAGO   = resolve(HERE, "fixtures/imago-workshop");
 const FIGTREE = resolve(DEMO, "assets/fonts/figtree");
 
@@ -114,7 +119,7 @@ async function loadSeededJournalInputs(): Promise<RenderInputs> {
   };
 }
 
-const pandoc: PandocInstance = { convert: convert as PandocInstance["convert"] };
+const pandoc = await loadPandoc();
 
 // ---------------------------------------------------------------------------
 // Primary suite — slipway-demo template
@@ -338,7 +343,6 @@ describe("seeded Journal theme", () => {
 
 describe("inlineFontUrls", () => {
   test("rewrites matching url() refs to data URIs by basename", async () => {
-    const { inlineFontUrls } = await import("../src/core/inline-assets");
     const css = `@font-face { src: url('fonts/figtree/x.woff2') format('woff2'); }`;
     const out = inlineFontUrls(css, new Map([["x.woff2", "data:font/woff2;base64,AAA"]]));
     expect(out).toContain("url(data:font/woff2;base64,AAA)");
@@ -346,143 +350,15 @@ describe("inlineFontUrls", () => {
   });
 
   test("leaves unknown url() refs untouched", async () => {
-    const { inlineFontUrls } = await import("../src/core/inline-assets");
     const css = `@font-face { src: url('fonts/other.woff2'); }`;
     expect(inlineFontUrls(css, new Map([["x.woff2", "data:font/woff2;base64,AAA"]]))).toBe(css);
   });
 
   test("no-op when there are no font assets", async () => {
-    const { inlineFontUrls } = await import("../src/core/inline-assets");
     const css = `.reveal { color: red; }`;
     expect(inlineFontUrls(css, new Map())).toBe(css);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Bundled-theme catalog + self-healing export
-// ---------------------------------------------------------------------------
-
-describe("bundled-themes catalog", () => {
-  // Note: Vite's SCSS preprocessor compiles `.scss?raw` to empty CSS inside
-  // vitest (the ?raw query loses to the css plugin), so we don't assert on
-  // SCSS byteLength here. The production build is verified by the existing
-  // smoke tests above ("seed theme.scss carries Quarto layer markers" etc.)
-  // and a `grep` of dist/assets confirms the content lands in the bundle.
-
-  test("exposes Imago with assets/imago.scss + Figtree fonts + OFL licence", async () => {
-    const { IMAGO } = await import("../src/storage/bundled-themes");
-    expect(IMAGO.scss.path).toBe("assets/imago.scss");
-    const paths = IMAGO.assets.map((a) => a.path);
-    expect(paths).toContain("assets/fonts/figtree/OFL.txt");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-wght-normal.woff2");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-wght-italic.woff2");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-ext-wght-normal.woff2");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-ext-wght-italic.woff2");
-    for (const asset of IMAGO.assets) {
-      expect(asset.read().byteLength).toBeGreaterThan(0);
-    }
-  });
-
-  test("exposes Journal with assets/journal.scss + ET Book fonts + MIT licence", async () => {
-    const { JOURNAL } = await import("../src/storage/bundled-themes");
-    expect(JOURNAL.scss.path).toBe("assets/journal.scss");
-    const paths = JOURNAL.assets.map((a) => a.path);
-    expect(paths).toContain("assets/fonts/et-book/LICENSE.txt");
-    expect(paths).toContain("assets/fonts/et-book/et-book-roman-line-figures/et-book-roman-line-figures.woff");
-    expect(paths).toContain("assets/fonts/et-book/et-book-bold-line-figures/et-book-bold-line-figures.woff");
-    expect(paths).toContain("assets/fonts/et-book/et-book-roman-old-style-figures/et-book-roman-old-style-figures.woff");
-    expect(paths).toContain("assets/fonts/et-book/et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.woff");
-    for (const asset of JOURNAL.assets) {
-      expect(asset.read().byteLength).toBeGreaterThan(0);
-    }
-  });
-
-  test("Figtree and ET Book asset paths don't overlap (one theme can be self-healed without dragging in the other)", async () => {
-    const { IMAGO, JOURNAL } = await import("../src/storage/bundled-themes");
-    const imago = new Set(IMAGO.assets.map((a) => a.path));
-    for (const a of JOURNAL.assets) expect(imago.has(a.path)).toBe(false);
-  });
-});
-
-describe("exportZip self-heals missing bundled-theme fonts", () => {
-  // Self-healing is the fix for issue #37: a project that keeps a bundled
-  // SCSS file but is missing the font files it references (e.g. a deck
-  // imported from a foreign zip without fonts, or fonts inadvertently
-  // deleted) should still produce an export that `quarto render` can render
-  // offline.
-
-  test("adds Figtree fonts and OFL.txt when assets/imago.scss is present but fonts aren't", async () => {
-    // Reset the IDB module state before importing fake-indexeddb so the test
-    // gets a clean store. fake-indexeddb/auto installs into globalThis.
-    await import("fake-indexeddb/auto");
-    // Bust the IDB connection cached at module scope: each test file gets a
-    // fresh import graph in vitest, but if this describe block is re-run we
-    // want a clean DB. Reset the global by removing the indexedDB db file.
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase("slipway");
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-      req.onblocked = () => resolve();
-    });
-
-    const storage = await import("../src/storage/storage");
-    const { exportZip } = await import("../src/storage/zip");
-    const { unzipSync } = await import("fflate");
-
-    // Project: just a qmd that uses Imago, plus the SCSS itself — no fonts.
-    await storage.writeText("slide.qmd", "---\ntitle: T\nformat: revealjs\n---\n# Hi\n");
-    await storage.writeText("assets/imago.scss", "/* user-edited imago */");
-    expect(await storage.exists("assets/fonts/figtree/figtree-latin-wght-normal.woff2")).toBe(false);
-
-    const blob = await exportZip(null);
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    const entries = unzipSync(buf);
-    const paths = Object.keys(entries);
-
-    // User's SCSS edits are preserved — NOT overwritten by the bundled original.
-    expect(new TextDecoder().decode(entries["assets/imago.scss"])).toBe("/* user-edited imago */");
-    // Figtree fonts + OFL licence get added even though IDB didn't have them.
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-wght-normal.woff2");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-wght-italic.woff2");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-ext-wght-normal.woff2");
-    expect(paths).toContain("assets/fonts/figtree/figtree-latin-ext-wght-italic.woff2");
-    expect(paths).toContain("assets/fonts/figtree/OFL.txt");
-    // Journal fonts are NOT pulled in — only Imago is in this project.
-    expect(paths.some((p) => p.includes("/et-book/"))).toBe(false);
-    // IDB was not modified — fonts are added to the zip only.
-    expect(await storage.exists("assets/fonts/figtree/figtree-latin-wght-normal.woff2")).toBe(false);
-
-    await storage.clearRoot();
-  });
-
-  test("doesn't pull in bundled fonts when no bundled theme is in the project", async () => {
-    await import("fake-indexeddb/auto");
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase("slipway");
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-      req.onblocked = () => resolve();
-    });
-
-    const storage = await import("../src/storage/storage");
-    const { exportZip } = await import("../src/storage/zip");
-    const { unzipSync } = await import("fflate");
-
-    await storage.writeText("slide.qmd", "---\ntitle: T\n---\n# Hi\n");
-    await storage.writeText("assets/theme.scss", "/* user's own theme */");
-
-    const blob = await exportZip(null);
-    const entries = unzipSync(new Uint8Array(await blob.arrayBuffer()));
-    expect(Object.keys(entries).some((p) => p.includes("/figtree/"))).toBe(false);
-    expect(Object.keys(entries).some((p) => p.includes("/et-book/"))).toBe(false);
-
-    await storage.clearRoot();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Frontmatter extraction unit tests
-// ---------------------------------------------------------------------------
 
 describe("frontmatter declaration extraction", () => {
   test("top-level theme: and bibliography:", () => {
@@ -588,39 +464,6 @@ describe("resolveDeclaredPath", () => {
   });
 });
 
-describe("file tree buildTree", () => {
-  test("empty folder (only .placeholder) still appears as a directory", async () => {
-    const { buildTree } = await import("../src/ui/file-tree");
-    const root = buildTree(["myfolder/.placeholder"]);
-    const folder = root.children.get("myfolder");
-    expect(folder?.isDir).toBe(true);
-    expect(folder?.children.size).toBe(0); // placeholder hidden, folder kept
-  });
-
-  test("root dotfile markers are hidden entirely", async () => {
-    const { buildTree } = await import("../src/ui/file-tree");
-    const root = buildTree([".seeded", ".bundled-themes", "demos/slide.qmd"]);
-    expect(root.children.has(".seeded")).toBe(false);
-    expect(root.children.has(".bundled-themes")).toBe(false);
-    expect(root.children.has("demos")).toBe(true);
-  });
-
-  test("nested files keep both folder and file nodes", async () => {
-    const { buildTree } = await import("../src/ui/file-tree");
-    const root = buildTree(["assets/theme.scss"]);
-    const a = root.children.get("assets");
-    expect(a?.isDir).toBe(true);
-    expect(a?.children.get("theme.scss")?.isDir).toBe(false);
-  });
-
-  test("folder with a real file and a placeholder shows only the file", async () => {
-    const { buildTree } = await import("../src/ui/file-tree");
-    const root = buildTree(["demos/.placeholder", "demos/slide.qmd"]);
-    const d = root.children.get("demos");
-    expect([...d!.children.keys()]).toEqual(["slide.qmd"]);
-  });
-});
-
 describe("rebaseChildPath", () => {
   test("grafts the sub-path onto the new folder", () => {
     expect(rebaseChildPath("a", "b/c", "a/x/y.qmd")).toBe("b/c/x/y.qmd");
@@ -722,4 +565,20 @@ describe("generated renderer assets", () => {
     expect(block("https://unpkg.com/reveal.js@^5/dist/reveal.css")).toContain(".reveal-viewport");
     expect(block("https://unpkg.com/reveal.js@^5/dist/theme/white.css")).toContain("--r-background-color");
   }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
+// Host-global fallbacks (src/host.ts)
+// ---------------------------------------------------------------------------
+
+describe("base64 encoding", () => {
+  test("pure-JS encoder matches the host's btoa path for every tail length", () => {
+    for (const len of [0, 1, 2, 3, 4, 5, 255, 256, 257, 100_000]) {
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = (i * 31 + 7) & 0xff;
+      const expected = Buffer.from(bytes).toString("base64");
+      expect(base64EncodePure(bytes)).toBe(expected);
+      expect(base64Encode(bytes)).toBe(expected);
+    }
+  });
 });

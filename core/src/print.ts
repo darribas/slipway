@@ -8,7 +8,7 @@
 // print script then opens Safari's print sheet on load — see
 // inlinePrintAssets in ./inline-assets.
 
-import { revealPrintCss as printCss } from "../generated/assets";
+import { revealPrintCss as printCss } from "./generated/assets";
 import { injectPrintView, inlinePrintAssets } from "./inline-assets";
 
 export function buildPrintVariant(html: string): string {
