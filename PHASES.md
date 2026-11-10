@@ -816,6 +816,32 @@ slipway --version | --help
 
 **Deferred to 4.6:** publishing the tarball under `/slipway/cli/` on Pages and attaching it to `cli-v*` releases.
 
+### Increment 4.2: a-Shell spikes — prepared, desk findings in; device run pending
+
+Findings only; no shipped code changed. An agent can't run a-Shell, so this increment (a) settles what can be settled from primary sources and local experiments, and (b) prepares a spike kit for Dani to run on the iPad. **4.3 stays blocked until the device results are back**; 4.4 onwards continues meanwhile.
+
+**Desk finding 1 — a-Shell's `jsc` is a WKWebView, not the JavaScriptCore API.** The issue assumed `jsc` embeds JavaScriptCore (no JIT → no Wasm). a-Shell's source says otherwise: in the main app, `jsc` calls `executeJavascript`, which runs the script with `WKWebView.evaluateJavaScript` in the terminal's own page (`wasm.html`); only the app-extension / background path falls back to a `JSContext` (`ExtraCommands.swift`, `SceneDelegate.swift`). The `jsc.readFile` / `writeFile` / `readFileBase64` / `system` API is a JS object in that page whose methods are synchronous `prompt("jsc\n<op>\n<args>")` calls answered natively. And a-Shell's own `wasm` command runs in the *same page* with `new WebAssembly.Module(bytes)` + `new WebAssembly.Instance(...)`. So WebAssembly should be available to a `jsc` script, compiled synchronously — to be confirmed on the device (spike S3).
+
+Consequences read off the same source: the script is evaluated synchronously and `jsc` returns when that evaluation does (an async path exists but is disabled with `if #available(iOS 15.0, *), false`), so the render must not depend on awaiting real async work; every run shares the page's global scope, so a script must be an IIFE (a second run of top-level `const`s would throw) — and, usefully, a pandoc instance stored on `globalThis` survives between runs until `jsc --reset`.
+
+**Desk finding 2 — the shipped `pandoc.wasm` cannot double as a `pandoc` command.** The issue calls it a reactor with no `_start`. It does export `_start` (exports: `memory, __wasm_call_ctors, _start, convert, query, malloc, hs_init_with_rtsopts`), and upstream's cabal file shows it is `pandoc-cli` built for `wasm32` with `convert`/`query` exported on top. But running `_start` under two WASI runtimes (Node's `node:wasi` and `browser_wasi_shim`) with `--version`, `-t latex` on stdin, a bogus flag, and `input.md -o out.html` gives exit 0 after ~1.5 s with **no output and no files** every time. So `_start` is inert in this build and the conclusion stands by a different route: the "external `pandoc` command" design (S1) would need a separately built WASI command module (GHC wasm backend, a long CI job). That is only worth doing if running pandoc inside `jsc` fails.
+
+**Revised plan for the a-Shell route.** Because of finding 1, the primary candidate is simpler than the issue's design: one bundled script run by `jsc` does everything — `prepareRender`, pandoc via a *synchronous* variant of `pandoc-core` (sync `Module`/`Instance`, no Blob), `finalizeRender`, write the HTML — with no temp job folder, no defaults file and no `jsc.system('pandoc …')`. S1 (command build) is **parked, not prepared**: per the issue, "if Wasm does work, skip S1", and every indication is that it does. If S3/S3b fail on the device, S1 is the next thing to prepare.
+
+**Spike kit** (`cli/spikes/ashell/`, throw-away): `build.mjs` produces three self-contained IIFE scripts and a fixture deck in `slipway-ashell-spike.tar.gz` (2.3 MB, committed so it can be fetched from `raw.githubusercontent.com`):
+
+- `s3-wasm.js` — S3 plus the host half of S2: `typeof WebAssembly`, synchronous compile of a tiny module, 512 MB memory growth, a globals inventory (`TextEncoder`, `btoa`, `performance`, …), `jsc` text and binary round-trips, relative paths, what a missing file returns, `jsc.system` exit codes and blocking, and whether promise / timer callbacks run after the script returns.
+- `s2-stages.js` — S2: `prepareRender` (Dart Sass) and `finalizeRender` on the fixture, fed pandoc's canned output for that exact job, SHA-256 compared with core's `demo-slide` golden; plus whether core's promise-based `buildRenderInputs` resolves under `jsc`.
+- `s3b-render.js` — the full route: read the 58 MB wasm through `readFileBase64`, decode, compile + instantiate synchronously, render, compare with the golden; a second run checks the cached-instance path.
+
+Each prints PASS/FAIL lines with timings and saves `report-*.txt`. Step-by-step instructions are in a comment on issue #41.
+
+**Local emulation** (`emulate.cjs`): a headless Chromium page with the same `jsc` object, its `prompt()` messages answered from Node with the same semantics as the Swift side. All three scripts pass there: the full render is byte-identical to the golden (first run ~4–5 s including a 2.3 s base64 read of the wasm; cached-instance re-run ~0.5 s). The emulation also caught something worth probing on the device: Chromium truncates a `prompt()` message at ~10 kB, which silently truncated `jsc.writeFile` of the 919 kB deck. WebKit's limit, if any, is unknown, so the scripts now write through a verified path — write, read back, compare, and fall back to appending chunks with `cat` — and report which strategy was needed. This is emulation of the bridge protocol only: it is Chromium, not WebKit, and says nothing about iPadOS memory limits.
+
+**Open questions only the device can answer:** WebAssembly present and synchronous compile of a 58 MB module allowed; memory headroom for a 78 MB base64 string + the module + pandoc's heap inside the web view; compile and render times; whether large `prompt()` payloads survive in both directions; whether the cached instance persists between `jsc` runs.
+
+**Outcome so far:** S2 and S3 pass in emulation; device run pending. Per the issue's decision rule, nothing further is built on the a-Shell route (4.3) until Dani has run the kit and the results are recorded here.
+
 -----
 
 ## Repo cleanup (deferred)
