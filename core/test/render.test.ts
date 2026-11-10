@@ -21,7 +21,9 @@ import {
   buildPrintVariant,
   buildRenderInputs,
   extractDeclarations,
+  finalizeRender,
   inlineFontUrls,
+  prepareRender,
   rebaseChildPath,
   renderDeck,
   resolveDeclaredPath,
@@ -652,5 +654,67 @@ describe("buildRenderInputs", () => {
     // Basename collisions: the first path in sorted order wins.
     expect(inputs.includes.get("_snippet.qmd")).toBe("first");
     expect(inputs.includes.get("README.md")).toBe("readme");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// prepareRender / finalizeRender — the split used when pandoc runs out of
+// process (a-Shell) and by anything that wants to inspect the pandoc job
+// ---------------------------------------------------------------------------
+
+describe("prepareRender / finalizeRender", () => {
+  test("the job carries the pandoc invocation renderDeck uses", async () => {
+    const job = prepareRender(await loadDemoInputs());
+    expect(job.options).toEqual({
+      from: "markdown",
+      to: "revealjs",
+      standalone: true,
+      "slide-level": 2,
+      "html-math-method": "katex",
+      variables: { theme: "white" },
+      css: ["theme.css"],
+      citeproc: true,
+      bibliography: "references.bib",
+    });
+    expect(Object.keys(job.files).sort()).toEqual(["references.bib", "theme.css"]);
+    // stdin is the preprocessed deck: include expanded, theme stripped.
+    expect(job.stdin).not.toContain("{{< include _snippet.qmd >}}");
+    expect(job.stdin).toContain("This paragraph was included from");
+    expect(job.stdin).not.toMatch(/^\s*theme:/m);
+    expect(job.ctx.revealOverrides).toMatchObject({ navigationMode: "linear", slideNumber: true });
+  });
+
+  test("a deck with no theme and no bibliography asks pandoc for neither", () => {
+    const job = prepareRender({
+      qmd: "# Hi\n", stylesheet: "", stylesheetIsPrecompiled: false,
+      bib: null, assets: new Map(), includes: new Map(),
+    });
+    expect(job.files).toEqual({});
+    expect(job.options).not.toHaveProperty("css");
+    expect(job.options).not.toHaveProperty("citeproc");
+  });
+
+  test("prepare → convert → finalize by hand equals renderDeck", async () => {
+    const inputs = await loadDemoInputs();
+    const job = prepareRender(inputs);
+    const out = await pandoc.convert(job.options, job.stdin, job.files);
+    const manual = finalizeRender(job, out);
+    const direct = await renderDeck(pandoc, inputs);
+    expect(manual.html).toBe(direct.html);
+    expect(manual.warnings).toEqual(direct.warnings);
+  }, 60_000);
+
+  test("finalize normalises pandoc's warning shapes", () => {
+    const job = prepareRender({
+      qmd: "# Hi\n", stylesheet: "", stylesheetIsPrecompiled: false,
+      bib: null, assets: new Map(), includes: new Map(),
+    });
+    const { warnings, stderr } = finalizeRender(job, {
+      stdout: "<html><body></body></html>",
+      stderr: "boom",
+      warnings: ["plain", { pretty: "pretty one" }, { other: 1 }],
+    });
+    expect(warnings).toEqual(["plain", "pretty one", '{"other":1}']);
+    expect(stderr).toBe("boom");
   });
 });

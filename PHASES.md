@@ -775,6 +775,23 @@ The PWA keeps its one-argument `buildRenderInputs(qmdPath)`, now a three-line wr
 
 The test-side mirror of this logic that 4.0a introduced (`test/helpers/project.ts`) is deleted in favour of a directory-backed `ProjectFS` driving the real function — and the goldens are unchanged, which confirms the mirror and the original agreed. Five new unit tests over an in-memory `ProjectFS` cover traversal resolution, the fallback chain, an unresolvable declaration, asset collection, and include keying. Core 59 tests, app 10, build green.
 
+### Increment 4.0d: `prepareRender` / `finalizeRender` split + `slideMap`
+
+**Render split.** `renderDeck` is now literally `prepareRender → pandoc.convert → finalizeRender`:
+
+- `prepareRender(inputs): PandocJob` — Sass compile, font + image data URIs, preprocessing, and the exact pandoc invocation (`options`, `stdin`, `files`), plus a `ctx` with what the second half needs (compiled CSS, the deck's `format.revealjs.*` overrides, pre-pandoc warnings, start time).
+- `finalizeRender(job, { stdout, stderr, warnings }): RenderResult` — warning normalisation and the five post-pandoc passes (sandbox compat, reveal assets, KaTeX, theme CSS, `Reveal.configure()` override).
+
+This is what lets pandoc run out of process (the a-Shell route: `job.options` is a valid pandoc defaults file once serialised) and gives tests a seam. One deviation from the issue's sketch of `PandocJob.ctx`: it also carries `css`, because `finalizeRender` inlines the compiled theme and re-reading it out of `files["theme.css"]` would be a hidden coupling. Tests: the job's options/files are locked down for the demo deck; a theme-less, bib-less deck asks pandoc for neither; doing the three steps by hand yields the same HTML as `renderDeck`; warning shapes are normalised. Goldens unchanged.
+
+**`slideMap(qmd, includes?)`** → `{ h, v, startLine, endLine }[]` (0-based, inclusive lines), with `slideAtLine` / `slideAtIndex` lookups, for editor ↔ preview sync in the extension. It is a line scanner mirroring pandoc's revealjs layout at slide-level 2: `title:` in the frontmatter makes slide h=0; a level-1 heading starts a horizontal slide and the level-2 headings and horizontal rules after it stack vertically beneath it; a level-2 heading or rule with no level-1 above is its own horizontal slide; `###`+ stay inside; code fences (with fence-length matching), fenced divs and HTML comments are skipped; setext headings and the "`#` inside a paragraph isn't a heading" rule are honoured. The optional `includes` map (the one `RenderInputs` carries) expands `{{< include >}}` so slides from an included file all map to the shortcode's line; without it the line is plain content. (The issue's signature was `slideMap(qmd)`; the second, optional parameter is the only way to *count* slides that come from includes, which the indices after the include depend on.)
+
+Rather than hand-writing expectations, `test/slide-map.test.ts` renders each deck with real pandoc, reads the `<section>` nesting out of the HTML and requires the same `(h, v)` sequence: all three fixture decks plus 20 synthetic edge cases (rules in and out of h1 groups, rule-then-heading, content before the first heading, content on an h1 slide, no title, fences, divs, comments, setext, empty headings…) agree. Two things this surfaced, both documented in the source: pandoc appends a trailing `#footnotes` slide that no source line maps to (the map simply ends before it), and pandoc promotes a div whose *first block* is a heading into a slide of its own — unusual markup, not modelled.
+
+**End-to-end acceptance for 4.0 (PWA unchanged).** Beyond the vitest goldens, the production build was served with `vite preview` and driven in headless Chromium: the seeded project's `demos/slide.qmd`, rendered by clicking Render in the real PWA (browser Sass build, browser wasm, IndexedDB `ProjectFS`), produces HTML whose SHA-256 equals core's `demo-slide` golden computed under Node — 919 031 bytes, identical — and reveal.js boots inside the sandboxed preview iframe (29 slides, no page errors). The driver is kept as `app/scripts/check-pwa-golden.cjs` (manual; needs a Playwright install). What this does not cover is the iPad itself — that is the 4.7 manual run.
+
+Core 91 tests, app 10, typechecks and build green.
+
 -----
 
 ## Repo cleanup (deferred)

@@ -3,7 +3,7 @@ import { preprocessDeck } from "./preprocess";
 import { extractDeclarations } from "./frontmatter";
 import { injectRevealConfigOverride, injectSandboxCompat, inlineFontUrls, inlineKatexAssets, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
 import { base64Encode, now } from "./host";
-import type { PandocInstance, RenderInputs, RenderResult } from "./types";
+import type { PandocInstance, PandocJob, PandocOutput, RenderInputs, RenderResult } from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
 const FONT_EXTENSIONS = new Set(["woff2", "woff", "ttf", "otf"]);
@@ -30,10 +30,14 @@ function bytesToDataUri(bytes: Uint8Array, mime: string): string {
   return `data:${mime};base64,${base64Encode(bytes)}`;
 }
 
-export async function renderDeck(
-  pandoc: PandocInstance,
-  inputs: RenderInputs,
-): Promise<RenderResult> {
+/**
+ * Everything that happens before pandoc: compile the theme, turn image and
+ * font assets into data URIs, preprocess the deck, and decide the exact
+ * pandoc invocation. The returned job is what `pandoc.convert()` is called
+ * with — or, where pandoc runs out of process (a-Shell), what gets written
+ * to disk for a `pandoc --defaults` run.
+ */
+export function prepareRender(inputs: RenderInputs): PandocJob {
   const t0 = now();
 
   // The stylesheet may be either Sass source (compile via Dart Sass) or
@@ -65,9 +69,9 @@ export async function renderDeck(
 
   const { qmd } = preprocessDeck(inputs.qmd, { assetUris, includes: inputs.includes });
 
-  const pandocFiles: Record<string, string | Uint8Array> = {};
-  if (css) pandocFiles["theme.css"] = css;
-  if (inputs.bib) pandocFiles["references.bib"] = inputs.bib;
+  const files: Record<string, string | Uint8Array> = {};
+  if (css) files["theme.css"] = css;
+  if (inputs.bib) files["references.bib"] = inputs.bib;
 
   const options: Record<string, unknown> = {
     from: "markdown",
@@ -83,10 +87,26 @@ export async function renderDeck(
     ...(inputs.bib ? { citeproc: true, bibliography: "references.bib" } : {}),
   };
 
-  const result = await pandoc.convert(options, qmd, pandocFiles);
+  return {
+    options,
+    stdin: qmd,
+    files,
+    ctx: {
+      css,
+      revealOverrides: extractDeclarations(inputs.qmd).revealjsOptions,
+      warnings: [],
+      t0,
+    },
+  };
+}
 
-  const warnings: string[] = [];
-  for (const w of result.warnings) {
+/**
+ * Everything that happens after pandoc: turn its standalone revealjs HTML
+ * into a self-contained deck.
+ */
+export function finalizeRender(job: PandocJob, out: PandocOutput): RenderResult {
+  const warnings: string[] = [...job.ctx.warnings];
+  for (const w of out.warnings) {
     if (typeof w === "string") warnings.push(w);
     else if (w && typeof w === "object" && "pretty" in w) warnings.push(String((w as { pretty: unknown }).pretty));
     else warnings.push(JSON.stringify(w));
@@ -103,17 +123,26 @@ export async function renderDeck(
   //   5. The user's `format.revealjs.*` options applied via Reveal.configure()
   //      after init, so boolean-false options like `controls: false` actually
   //      take effect (pandoc's template skips them).
-  const declared = extractDeclarations(inputs.qmd);
-  let html = injectSandboxCompat(result.stdout);
+  let html = injectSandboxCompat(out.stdout);
   html = inlineRevealAssets(html);
   html = inlineKatexAssets(html);
-  html = inlineThemeCss(html, css);
-  html = injectRevealConfigOverride(html, declared.revealjsOptions);
+  html = inlineThemeCss(html, job.ctx.css);
+  html = injectRevealConfigOverride(html, job.ctx.revealOverrides);
 
   return {
     html,
     warnings,
-    stderr: result.stderr,
-    durationMs: now() - t0,
+    stderr: out.stderr,
+    durationMs: now() - job.ctx.t0,
   };
+}
+
+/** prepare → pandoc.convert → finalize, for hosts that run pandoc in-process. */
+export async function renderDeck(
+  pandoc: PandocInstance,
+  inputs: RenderInputs,
+): Promise<RenderResult> {
+  const job = prepareRender(inputs);
+  const out = await pandoc.convert(job.options, job.stdin, job.files);
+  return finalizeRender(job, out);
 }
