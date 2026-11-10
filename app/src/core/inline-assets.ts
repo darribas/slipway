@@ -8,20 +8,22 @@
 // reveal.js source — pinned to the version in package.json (currently
 // reveal.js@5.2.1) and updated only when the dep is bumped.
 //
-// KaTeX (loaded from jsdelivr when html-math-method=katex) is a future
-// extension: its font files are referenced relatively from inside the CSS,
-// so inlining it correctly means data-URI'ing the fonts too. Out of scope
-// here; the workshop deck has no math.
+// The asset strings (reveal.js, its plugins and base themes, KaTeX with its
+// fonts as data URIs) come from src/generated/assets.ts, a plain TS module
+// written by scripts/gen-assets.mjs — no bundler-specific imports here.
 
-import { js as katexJs, css as katexCss } from "virtual:katex-inlined";
-import resetCss from "reveal.js/dist/reset.css?raw";
-import revealCss from "reveal.js/dist/reveal.css?raw";
-import revealJs from "reveal.js/dist/reveal.js?raw";
-import themeWhiteCss from "reveal.js/dist/theme/white.css?raw";
-import themeBlackCss from "reveal.js/dist/theme/black.css?raw";
-import notesJs from "reveal.js/plugin/notes/notes.js?raw";
-import searchJs from "reveal.js/plugin/search/search.js?raw";
-import zoomJs from "reveal.js/plugin/zoom/zoom.js?raw";
+import {
+  katexCss,
+  katexJs,
+  revealCss,
+  revealJs,
+  revealNotesJs as notesJs,
+  revealResetCss as resetCss,
+  revealSearchJs as searchJs,
+  revealThemeBlackCss as themeBlackCss,
+  revealThemeWhiteCss as themeWhiteCss,
+  revealZoomJs as zoomJs,
+} from "../generated/assets";
 
 type AssetKind = "css" | "js";
 interface Asset {
@@ -135,7 +137,7 @@ export function inlineFontUrls(css: string, fontUris: Map<string, string>): stri
  * fails entirely when offline; this pins to the bundled version and
  * eliminates the network dependency.
  *
- * The CSS variant produced by katexInlinePlugin already has all fonts
+ * The CSS variant produced by scripts/gen-assets.mjs already has all fonts
  * embedded as data URIs, so the deck renders math correctly in the
  * sandboxed srcdoc iframe (null origin, no relative URL resolution).
  */

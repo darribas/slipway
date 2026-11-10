@@ -4,10 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "gen-assets": "node scripts/gen-assets.mjs",
+    "predev": "npm run gen-assets",
     "dev": "vite",
+    "prebuild": "npm run gen-assets",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "pretypecheck": "npm run gen-assets",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run gen-assets",
     "test": "vitest run"
   },
   "dependencies": {

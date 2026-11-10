@@ -725,6 +725,25 @@ The vitest run currently can't validate the SCSS content of the bundled catalog 
 
 -----
 
+## Phase 4 — Shared core + two new surfaces (issue #41)
+
+**Status:** in progress
+**Spec:** issue #41 — extract the renderer into a shared `core/` package and ship it through two more surfaces besides the PWA: a VS Code web extension and a `slipway` CLI. All three must render the same deck to the same HTML.
+
+### Increment 4.0a: Golden outputs + generated assets module
+
+First step of the extraction, still entirely inside `app/`.
+
+**Goldens.** New `test/golden.test.ts` renders four fixture decks — the demo `slide.qmd`, the Imago showcase, the `imago-workshop` fixture, and a synthetic Journal-theme probe (math + `controls: false`) — plus the print variant of the demo, and compares each against `test/goldens/goldens.json`. The rendered HTML is ~0.5–1.1 MB per deck, so the goldens are SHA-256 + byte length rather than the documents; on a mismatch the actual HTML is written to `test/goldens/.actual/` (git-ignored) for diffing. `UPDATE_GOLDENS=1 npm test` re-records. Inputs are assembled by `test/helpers/project.ts`, a directory-backed mirror of `buildRenderInputs()` (it goes away in 4.0c when the real one moves to core behind `ProjectFS`). Renders were confirmed deterministic across runs (`date: today` passes through literally; nothing is time-dependent).
+
+**Generated assets.** `scripts/gen-assets.mjs` writes `src/generated/assets.ts` (git-ignored, ~930 kB): reveal.js reset/reveal/white/black CSS, `reveal.js`, the notes/search/zoom plugins, KaTeX JS + CSS with woff2 fonts as data URIs, and reveal's `print/pdf.scss` compiled with Sass. It reproduces what `katexInlinePlugin`, `revealPrintCssPlugin` and the eight `?raw` imports produced, and replaces them — both plugins are deleted from `vite.config.ts`, and `inline-assets.ts` / `print.ts` import the plain module. Wired as `predev` / `prebuild` / `pretest` / `pretypecheck`, and skips the write when the content is unchanged so watchers don't churn. The renderer now has no bundler-specific imports except `virtual:pandoc-wasm-url` in the PWA's loader (which stays per surface).
+
+**What the goldens caught: the tests had been rendering with empty reveal CSS.** The goldens captured before the change did *not* match after it. Cause: under vitest, Vite's CSS plugin wins over the `?raw` query for `.css` files (the same quirk increment 34.9 noted for `.scss?raw`), so `reset.css`, `reveal.css` and `theme/white.css` were imported as **empty strings** in every test run since the assets were first inlined. Production builds were always correct (verified: the pre-change `dist/` bundle contains the real stylesheets). So "byte-identical before and after" was checked in the only way that is meaningful: the before/after HTML of three decks and their print variants were dumped, the three empty `<style>` blocks in the "before" files were filled with the package's CSS files, and the results are byte-identical to the "after" output — i.e. the generated module changes nothing except making the test environment see what production ships. The committed goldens are the post-change (production-equivalent) hashes, and a new smoke assertion checks the three reveal `<style>` blocks have real content.
+
+62 tests (57 + 4 golden + 1 new), `tsc` clean, build green.
+
+-----
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)

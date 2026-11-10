@@ -703,3 +703,23 @@ describe("buildPrintVariant", () => {
     expect(out).toMatch(/@page\s*\{\s*size:\s*landscape/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Generated assets module (scripts/gen-assets.mjs)
+// ---------------------------------------------------------------------------
+
+describe("generated renderer assets", () => {
+  test("reveal.js stylesheets are inlined with real content", async () => {
+    // Regression guard for a blind spot the Phase 4 goldens exposed: when the
+    // renderer imported reveal's CSS via `?raw`, vitest's CSS plugin turned
+    // those imports into empty strings, so every test rendered a deck with
+    // empty reset/reveal/theme <style> blocks (production was fine). With the
+    // generated assets module the tests see what production ships.
+    const { html } = await renderDeck(pandoc, await loadDemoInputs());
+    const block = (url: string) =>
+      html.split(`<style data-from="${url}">`)[1]?.split("</style>")[0] ?? "";
+    expect(block("https://unpkg.com/reveal.js@^5/dist/reset.css")).toContain("meyerweb");
+    expect(block("https://unpkg.com/reveal.js@^5/dist/reveal.css")).toContain(".reveal-viewport");
+    expect(block("https://unpkg.com/reveal.js@^5/dist/theme/white.css")).toContain("--r-background-color");
+  }, 30_000);
+});
