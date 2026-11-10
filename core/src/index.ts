@@ -30,6 +30,7 @@ export type {
   PandocJob,
   PandocOutput,
   ProjectFile,
+  RenderDiagnostic,
   RenderInputs,
   RenderResult,
 } from "./types";

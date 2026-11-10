@@ -72,3 +72,30 @@ jobs:
       - name: Typecheck + build
         run: npm run build
         working-directory: app
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            cli/package-lock.json
+
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: cli
+
+      # `npm test` typechecks and builds dist/ first (pretest), then runs the
+      # in-process tests and the tests against the built bundle + tarball.
+      - name: Typecheck + build + test
+        run: npm test
+        working-directory: cli

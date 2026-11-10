@@ -20,10 +20,27 @@ export interface RenderInputs {
   includes: Map<string, string>;
 }
 
+export interface RenderDiagnostic {
+  /** pandoc's INFO-level notes (e.g. "Loaded references.bib") vs real warnings. */
+  severity: "info" | "warning";
+  message: string;
+}
+
 export interface RenderResult {
   html: string;
+  /** Every pandoc message as plain text, whatever its severity. */
   warnings: string[];
+  /**
+   * Sass messages (deprecations as "info", @warn as "warning") followed by
+   * pandoc's messages with their verbosity preserved.
+   */
+  diagnostics: RenderDiagnostic[];
   stderr: string;
+  /**
+   * False when pandoc produced no document (it reports why on stderr, e.g.
+   * an unreadable bibliography). `html` is not a usable deck in that case.
+   */
+  ok: boolean;
   durationMs: number;
 }
 
@@ -41,8 +58,8 @@ export interface PandocJob {
     css: string;
     /** The deck's format.revealjs.* options, applied post-init. */
     revealOverrides: Record<string, unknown>;
-    /** Warnings raised before pandoc ran. */
-    warnings: string[];
+    /** Messages raised before pandoc ran (Sass deprecations and @warn). */
+    diagnostics: RenderDiagnostic[];
     /** Start timestamp (ms) for RenderResult.durationMs. */
     t0: number;
   };

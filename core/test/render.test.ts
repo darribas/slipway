@@ -709,12 +709,67 @@ describe("prepareRender / finalizeRender", () => {
       qmd: "# Hi\n", stylesheet: "", stylesheetIsPrecompiled: false,
       bib: null, assets: new Map(), includes: new Map(),
     });
-    const { warnings, stderr } = finalizeRender(job, {
+    const { warnings, diagnostics, stderr, ok } = finalizeRender(job, {
       stdout: "<html><body></body></html>",
       stderr: "boom",
-      warnings: ["plain", { pretty: "pretty one" }, { other: 1 }],
+      warnings: ["plain", { pretty: "pretty one", verbosity: "WARNING" }, { pretty: "a note", verbosity: "INFO" }, { other: 1 }],
     });
-    expect(warnings).toEqual(["plain", "pretty one", '{"other":1}']);
+    expect(warnings).toEqual(["plain", "pretty one", "a note", '{"other":1}']);
+    expect(diagnostics.map((d) => d.severity)).toEqual(["warning", "warning", "info", "warning"]);
     expect(stderr).toBe("boom");
+    expect(ok).toBe(true);
   });
+});
+
+describe("pandoc failures", () => {
+  test("an unreadable bibliography yields ok=false with pandoc's reason on stderr", async () => {
+    const result = await renderDeck(pandoc, {
+      qmd: "# Hi\n", stylesheet: "", stylesheetIsPrecompiled: false,
+      bib: "@misc{broken, title={T", assets: new Map(), includes: new Map(),
+    });
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain("Error reading bibliography");
+  }, 30_000);
+
+  test("a missing citation is a warning, a loaded bibliography only an info note", async () => {
+    const result = await renderDeck(pandoc, {
+      qmd: "# Hi\n\nSee [@nope].\n", stylesheet: "", stylesheetIsPrecompiled: false,
+      bib: "@misc{a, title={T}}", assets: new Map(), includes: new Map(),
+    });
+    expect(result.ok).toBe(true);
+    const bySeverity = (s: string) => result.diagnostics.filter((d) => d.severity === s).map((d) => d.message);
+    expect(bySeverity("warning").join("\n")).toContain("citation nope not found");
+    expect(bySeverity("info").join("\n")).toContain("Loaded references.bib");
+  }, 30_000);
+});
+
+describe("Sass diagnostics", () => {
+  const inputs = (stylesheet: string): RenderInputs => ({
+    qmd: "# Hi\n", stylesheet, stylesheetIsPrecompiled: false,
+    bib: null, assets: new Map(), includes: new Map(),
+  });
+
+  test("deprecations are collected as info, with the theme line, and not printed", () => {
+    const job = prepareRender(inputs("$c: #336699;\n.reveal a {\n  color: darken($c, 10%);\n}\n"));
+    const infos = job.ctx.diagnostics.filter((d) => d.severity === "info").map((d) => d.message);
+    expect(infos.length).toBeGreaterThan(0);
+    expect(infos.join("\n")).toMatch(/Sass deprecation \[color-functions\]: darken\(\) is deprecated.*\(theme line 3\)/);
+    expect(job.ctx.diagnostics.some((d) => d.severity === "warning")).toBe(false);
+    // The CSS itself is unaffected.
+    expect(job.ctx.css).toContain(".reveal a");
+  });
+
+  test("@warn is a warning; a clean theme yields no diagnostics", () => {
+    const warned = prepareRender(inputs("@warn \"check the palette\";\n.reveal { color: red; }\n"));
+    expect(warned.ctx.diagnostics).toEqual([
+      { severity: "warning", message: "Sass: check the palette" },
+    ]);
+    expect(prepareRender(inputs(".reveal { color: red; }\n")).ctx.diagnostics).toEqual([]);
+  });
+
+  test("Sass messages reach RenderResult.diagnostics but not the pandoc-only warnings list", async () => {
+    const result = await renderDeck(pandoc, inputs("@warn \"heads up\";\n.reveal { color: red; }\n"));
+    expect(result.diagnostics[0]).toEqual({ severity: "warning", message: "Sass: heads up" });
+    expect(result.warnings.join("\n")).not.toContain("heads up");
+  }, 30_000);
 });

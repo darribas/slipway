@@ -69,6 +69,13 @@ app/                                   the PWA (Vite project)
                                        PWA-vs-core golden check
   scripts/render-icons.mjs             one-shot icon regenerator
   public/                              icon files + manifest.webmanifest
+cli/                                   the `slipway` command (Node)
+  src/cli.ts                           args, exit codes, render flow
+  src/node-fs.ts, src/root.ts          node:fs ProjectFS, project-root rules
+  src/bin.ts                           executable entry
+  scripts/build.mjs                    esbuild → dist/slipway.mjs, copies
+                                       pandoc.wasm next to it
+  test/cli.test.ts                     in-process + built-artifact tests
 .github/workflows/                     deploy.yml + ci.yml
 ```
 
@@ -86,8 +93,8 @@ working on.
 - **One increment = one commit.** Small, focused, with a substantive commit
   message. The user has a strong preference for shipping each increment as
   its own merge to `main` rather than batching.
-- **Tests must stay green.** `cd core && npm test` (renderer + goldens) and
-  `cd app && npm test`. CI gates merges via `.github/workflows/ci.yml`;
+- **Tests must stay green.** `cd core && npm test` (renderer + goldens),
+  `cd app && npm test` and `cd cli && npm test`. CI gates merges via `.github/workflows/ci.yml`;
   deploy re-runs the tests before publishing. When you change the renderer,
   add an assertion to `core/test/render.test.ts` that locks the behaviour
   down. If the change intentionally alters rendered HTML, re-record the

@@ -3,7 +3,14 @@ import { preprocessDeck } from "./preprocess";
 import { extractDeclarations } from "./frontmatter";
 import { injectRevealConfigOverride, injectSandboxCompat, inlineFontUrls, inlineKatexAssets, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
 import { base64Encode, now } from "./host";
-import type { PandocInstance, PandocJob, PandocOutput, RenderInputs, RenderResult } from "./types";
+import type {
+  PandocInstance,
+  PandocJob,
+  PandocOutput,
+  RenderDiagnostic,
+  RenderInputs,
+  RenderResult,
+} from "./types";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
 const FONT_EXTENSIONS = new Set(["woff2", "woff", "ttf", "otf"]);
@@ -39,6 +46,7 @@ function bytesToDataUri(bytes: Uint8Array, mime: string): string {
  */
 export function prepareRender(inputs: RenderInputs): PandocJob {
   const t0 = now();
+  const diagnostics: RenderDiagnostic[] = [];
 
   // The stylesheet may be either Sass source (compile via Dart Sass) or
   // already-compiled CSS (use as-is). Empty string means no theme in the
@@ -46,7 +54,7 @@ export function prepareRender(inputs: RenderInputs): PandocJob {
   let css = inputs.stylesheet
     ? inputs.stylesheetIsPrecompiled
       ? inputs.stylesheet
-      : compileScss(inputs.stylesheet)
+      : compileScss(inputs.stylesheet, diagnostics)
     : "";
 
   // Build the asset-URI maps: images get inlined into the markdown, fonts
@@ -94,7 +102,7 @@ export function prepareRender(inputs: RenderInputs): PandocJob {
     ctx: {
       css,
       revealOverrides: extractDeclarations(inputs.qmd).revealjsOptions,
-      warnings: [],
+      diagnostics,
       t0,
     },
   };
@@ -105,11 +113,20 @@ export function prepareRender(inputs: RenderInputs): PandocJob {
  * into a self-contained deck.
  */
 export function finalizeRender(job: PandocJob, out: PandocOutput): RenderResult {
-  const warnings: string[] = [...job.ctx.warnings];
+  // `warnings` is pandoc's messages only (what the PWA has always shown);
+  // `diagnostics` adds the Sass messages collected before pandoc ran.
+  const diagnostics: RenderDiagnostic[] = [...job.ctx.diagnostics];
+  const warnings: string[] = [];
   for (const w of out.warnings) {
-    if (typeof w === "string") warnings.push(w);
-    else if (w && typeof w === "object" && "pretty" in w) warnings.push(String((w as { pretty: unknown }).pretty));
-    else warnings.push(JSON.stringify(w));
+    let message: string;
+    let severity: RenderDiagnostic["severity"] = "warning";
+    if (typeof w === "string") message = w;
+    else if (w && typeof w === "object" && "pretty" in w) {
+      message = String((w as { pretty: unknown }).pretty);
+      if ((w as { verbosity?: unknown }).verbosity === "INFO") severity = "info";
+    } else message = JSON.stringify(w);
+    diagnostics.push({ severity, message });
+    warnings.push(message);
   }
 
   // Five post-pandoc passes:
@@ -132,7 +149,9 @@ export function finalizeRender(job: PandocJob, out: PandocOutput): RenderResult 
   return {
     html,
     warnings,
+    diagnostics,
     stderr: out.stderr,
+    ok: out.stdout.trim() !== "",
     durationMs: now() - job.ctx.t0,
   };
 }

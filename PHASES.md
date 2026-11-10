@@ -792,6 +792,30 @@ Rather than hand-writing expectations, `test/slide-map.test.ts` renders each dec
 
 Core 91 tests, app 10, typechecks and build green.
 
+### Increment 4.1: `slipway` CLI (Node)
+
+New package `cli/` — the smallest consumer of core, built first to prove the API before the extension.
+
+```
+slipway render <deck.qmd> [-o out.html] [--root <dir>] [--print] [--verbose]
+slipway --version | --help
+```
+
+- **Same bytes as the PWA.** The CLI calls `buildRenderInputs` (over a `node:fs` `ProjectFS`) → `prepareRender` → `createPandocInstance(wasm).convert` → `finalizeRender`; `--print` adds `buildPrintVariant`. Its tests render the demo deck, the Imago showcase, the `imago-workshop` fixture and the print variant and compare SHA-256 against **core's `goldens.json`** — the same file the PWA check uses.
+- **Project root:** `--root`, else the nearest ancestor with `_quarto.yml`, else cwd if the deck is under it, else the deck's folder. Hidden folders and `node_modules` are never walked (a test plants a broken `.scss` in `.git/`, `.quarto/` and `node_modules/` and requires the render to succeed).
+- **Output and exit codes:** stdout carries only `Output created: <path>`; warnings go to stderr; `0` rendered, `1` pandoc or Sass error (nothing written), `2` usage error / file not found — all covered by tests.
+- **Packaging:** esbuild bundles everything (core's TS, Dart Sass, yaml, the WASI shim) into `dist/slipway.mjs` (7.4 MB) with `pandoc.wasm` copied beside it; `npm pack` gives `slipway-cli-0.1.0.tgz`, **17.6 MB**, with no dependencies, so `npm install -g <url>` touches no registry. Dart Sass's Node build is CommonJS inside and calls `require()`, so the ESM bundle gets a `createRequire` banner. Tests assert the bundle has only `node:` imports and that the tarball contains exactly `dist/slipway.mjs`, `dist/pandoc.wasm`, `README.md`, `package.json`.
+- **Verified by hand as well:** packed the tarball, `npm install -g --offline` into a scratch prefix, ran the installed `slipway render imago-showcase.qmd --root ..` — output hash equals the golden. A render takes ~2.4 s wall (wasm instantiate + render) on this machine.
+
+**Two small additions to core, both additive (goldens unchanged):**
+
+- `RenderResult.ok` — false when pandoc produced no document (it reports why on stderr, e.g. `Error reading bibliography file`); and `RenderResult.diagnostics`, the pandoc messages with their verbosity kept (`info` vs `warning`). `warnings: string[]` is untouched, so the PWA's status line behaves as before.
+- **Sass messages are captured instead of printed.** Dart Sass's default logger writes straight to stderr/console; the bundled Imago theme alone produced ~80 lines of deprecation notices per CLI render. `compileScss` now takes a logger that records deprecations as `info` and `@warn` as `warning` diagnostics (with the theme line where Sass gives one). The CLI shows warnings always and info notes with `--verbose`. Side effect for the PWA: those notices no longer land in the browser console; its visible warning count is unchanged because Sass messages are only in `diagnostics`.
+
+`ci.yml` gains a `cli` job. Core 96 tests, CLI 18, app 10.
+
+**Deferred to 4.6:** publishing the tarball under `/slipway/cli/` on Pages and attaching it to `cli-v*` releases.
+
 -----
 
 ## Repo cleanup (deferred)
