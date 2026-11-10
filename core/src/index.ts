@@ -5,6 +5,8 @@
 
 export { renderDeck } from "./render";
 export { buildPrintVariant } from "./print";
+export { buildRenderInputs } from "./project";
+export type { ProjectFS } from "./project";
 export { createPandocInstance } from "./pandoc-core.js";
 export { extractDeclarations } from "./frontmatter";
 export type { Declarations } from "./frontmatter";

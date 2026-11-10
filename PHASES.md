@@ -758,6 +758,23 @@ The renderer is now its own package, a sibling of `app/`, and the PWA consumes i
 
 **Caught:** `npm install` crashes on a fresh resolve with npm 10.9.9 (`Cannot read properties of null (reading 'edgesOut')`, in arborist's peer-set loading for vitest — reproducible with a bare `vitest` dependency in an empty folder). `npm install --legacy-peer-deps` generates the lockfile; plain `npm ci` from it works. Noted in `CLAUDE.md`.
 
+### Increment 4.0c: `buildRenderInputs` + `ProjectFS` in core
+
+The rules for turning "a deck path in a project" into `RenderInputs` (declared-theme / bibliography resolution with `../` tolerance, first-`.scss`-then-`.css` fallback, basename-keyed image + font assets, include candidates) moved from `app/src/storage/project.ts` to `core/src/project.ts`, behind a three-method interface:
+
+```ts
+interface ProjectFS {
+  listFiles(): Promise<string[]>;   // POSIX paths relative to the project root, sorted
+  readText(path: string): Promise<string>;
+  readBytes(path: string): Promise<Uint8Array>;
+}
+buildRenderInputs(qmdPath: string, fs: ProjectFS): Promise<RenderInputs>
+```
+
+The PWA keeps its one-argument `buildRenderInputs(qmdPath)`, now a three-line wrapper passing an IndexedDB-backed `ProjectFS`. The body moved verbatim; the one thing made explicit in the interface docs is that **list order is part of the contract** (it decides the fallback theme and which of two same-named assets wins), so adapters must return a sorted list like `storage.listFiles()` does.
+
+The test-side mirror of this logic that 4.0a introduced (`test/helpers/project.ts`) is deleted in favour of a directory-backed `ProjectFS` driving the real function — and the goldens are unchanged, which confirms the mirror and the original agreed. Five new unit tests over an in-memory `ProjectFS` cover traversal resolution, the fallback chain, an unresolvable declaration, asset collection, and include keying. Core 59 tests, app 10, build green.
+
 -----
 
 ## Repo cleanup (deferred)

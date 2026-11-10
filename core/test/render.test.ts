@@ -19,6 +19,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   buildPrintVariant,
+  buildRenderInputs,
   extractDeclarations,
   inlineFontUrls,
   rebaseChildPath,
@@ -28,6 +29,7 @@ import {
 import type { RenderInputs } from "../src/index";
 import { base64Encode, base64EncodePure } from "../src/host";
 import { loadPandoc } from "./helpers/pandoc";
+import { memProjectFS } from "./helpers/project";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEMO    = resolve(HERE, "../../app/src/templates/slipway-demo");
@@ -580,5 +582,75 @@ describe("base64 encoding", () => {
       expect(base64EncodePure(bytes)).toBe(expected);
       expect(base64Encode(bytes)).toBe(expected);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRenderInputs over a ProjectFS
+// ---------------------------------------------------------------------------
+
+describe("buildRenderInputs", () => {
+  const deck = (yaml: string) => `---\ntitle: T\n${yaml}---\n\n# Hi\n`;
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
+  test("resolves declared theme and bibliography with ../ traversal", async () => {
+    const fs = memProjectFS({
+      "slides/deck.qmd": deck("format:\n  revealjs:\n    theme: ../assets/b.scss\nbibliography: ../refs/two.bib\n"),
+      "assets/a.scss": "/* a */",
+      "assets/b.scss": "/* b */",
+      "refs/one.bib": "@misc{one}",
+      "refs/two.bib": "@misc{two}",
+    });
+    const inputs = await buildRenderInputs("slides/deck.qmd", fs);
+    expect(inputs.stylesheet).toBe("/* b */");
+    expect(inputs.stylesheetIsPrecompiled).toBe(false);
+    expect(inputs.bib).toBe("@misc{two}");
+  });
+
+  test("falls back to the first .scss, then the first .css, then nothing", async () => {
+    const qmd = deck("");
+    let inputs = await buildRenderInputs("deck.qmd", memProjectFS({
+      "deck.qmd": qmd, "z.css": "/* css */", "b.scss": "/* b */", "a.scss": "/* a */",
+    }));
+    expect(inputs.stylesheet).toBe("/* a */");
+    inputs = await buildRenderInputs("deck.qmd", memProjectFS({ "deck.qmd": qmd, "z.css": "/* css */" }));
+    expect(inputs.stylesheet).toBe("/* css */");
+    expect(inputs.stylesheetIsPrecompiled).toBe(true);
+    inputs = await buildRenderInputs("deck.qmd", memProjectFS({ "deck.qmd": qmd }));
+    expect(inputs.stylesheet).toBe("");
+    expect(inputs.bib).toBeNull();
+  });
+
+  test("an unresolvable declared theme falls back rather than failing", async () => {
+    const inputs = await buildRenderInputs("deck.qmd", memProjectFS({
+      "deck.qmd": deck("theme: missing.scss\n"), "only.scss": "/* only */",
+    }));
+    expect(inputs.stylesheet).toBe("/* only */");
+  });
+
+  test("collects image and font assets by basename, ignoring other files", async () => {
+    const inputs = await buildRenderInputs("deck.qmd", memProjectFS({
+      "deck.qmd": deck(""),
+      "assets/pic.PNG": png,
+      "assets/fonts/x/face.woff2": png,
+      "notes.txt": "nope",
+    }));
+    expect([...inputs.assets.keys()].sort()).toEqual(["face.woff2", "pic.PNG"]);
+    expect(inputs.assets.get("pic.PNG")).toEqual(png);
+  });
+
+  test("include candidates are keyed by path and basename, excluding the deck", async () => {
+    const inputs = await buildRenderInputs("demos/deck.qmd", memProjectFS({
+      "demos/deck.qmd": deck(""),
+      "demos/_snippet.qmd": "first",
+      "other/_snippet.qmd": "second",
+      "README.md": "readme",
+    }));
+    expect(inputs.includes.has("demos/deck.qmd")).toBe(false);
+    expect(inputs.includes.get("demos/_snippet.qmd")).toBe("first");
+    expect(inputs.includes.get("other/_snippet.qmd")).toBe("second");
+    // Basename collisions: the first path in sorted order wins.
+    expect(inputs.includes.get("_snippet.qmd")).toBe("first");
+    expect(inputs.includes.get("README.md")).toBe("readme");
   });
 });

@@ -1,5 +1,5 @@
-import { extractDeclarations, resolveDeclaredPath } from "@slipway/core";
-import type { RenderInputs } from "@slipway/core";
+import { buildRenderInputs as coreBuildRenderInputs } from "@slipway/core";
+import type { ProjectFS, RenderInputs } from "@slipway/core";
 import { listFiles, readBytes, readText, writeText } from "./storage";
 
 /**
@@ -68,68 +68,18 @@ export async function saveFile(path: string, content: string): Promise<void> {
   await writeText(path, content);
 }
 
+// The PWA's project is the flat set of files in IndexedDB.
+const idbProjectFS: ProjectFS = {
+  listFiles: () => listFiles(),
+  readText,
+  readBytes,
+};
+
 /**
- * Resolve a deck path into the bundle of files needed for rendering: the .qmd
- * itself, the project's theme stylesheet (.scss preferred; .css accepted as
- * already-compiled), the bib, and all image assets. Path resolution is
- * intentionally forgiving — YAML's relative paths (`../assets/foo.png`) are
- * flattened against the project at render time.
+ * Resolve a deck path into the bundle of files needed for rendering. The
+ * resolution rules live in @slipway/core (shared with the CLI and the VS
+ * Code extension); this just points them at IndexedDB.
  */
-export async function buildRenderInputs(qmdPath: string): Promise<RenderInputs> {
-  const qmd = await readText(qmdPath);
-  const all = await listFiles();
-  const declared = extractDeclarations(qmd);
-
-  // Theme resolution. Honour the YAML's `theme:` declaration when present
-  // (with path resolution that tolerates `../` segments and basename
-  // shorthand), so a project with multiple .scss files renders predictably.
-  // Fall back to "first .scss" then "first .css" only when nothing's
-  // declared or the declared path can't be resolved.
-  let themePath: string | null = null;
-  if (declared.theme) themePath = resolveDeclaredPath(declared.theme, all);
-  if (!themePath) themePath = pickFirst(all, (p) => p.toLowerCase().endsWith(".scss"));
-  if (!themePath) themePath = pickFirst(all, (p) => p.toLowerCase().endsWith(".css"));
-  const stylesheet = themePath ? await readText(themePath) : "";
-  const stylesheetIsPrecompiled = themePath?.toLowerCase().endsWith(".css") ?? false;
-
-  // Bibliography resolution follows the same pattern.
-  let bibPath: string | null = null;
-  if (declared.bib) bibPath = resolveDeclaredPath(declared.bib, all);
-  if (!bibPath) bibPath = pickFirst(all, (p) => p.toLowerCase().endsWith(".bib"));
-  const bib = bibPath ? await readText(bibPath) : null;
-
-  // Binary assets the renderer inlines as data URIs: images (rewritten into
-  // the markdown) and fonts (rewritten into the compiled theme CSS). Both are
-  // keyed by basename to match the renderer's lookup.
-  const assets = new Map<string, Uint8Array>();
-  for (const p of all) {
-    const ext = p.split(".").pop()?.toLowerCase() ?? "";
-    if (["png", "jpg", "jpeg", "gif", "webp", "svg", "woff2", "woff", "ttf", "otf"].includes(ext)) {
-      const basename = p.split("/").pop()!;
-      assets.set(basename, await readBytes(p));
-    }
-  }
-
-  // {{< include … >}} candidates: every .qmd / .md in the project except the
-  // deck itself. Keyed by both project path and basename so shortcode args
-  // like `_snippet.qmd` and `includes/_snippet.qmd` both resolve. When two
-  // files share a basename the first one wins on the basename key (the
-  // explicit-path key still uniquely resolves either).
-  const includes = new Map<string, string>();
-  for (const p of all) {
-    const ext = p.split(".").pop()?.toLowerCase() ?? "";
-    if ((ext === "qmd" || ext === "md" || ext === "markdown") && p !== qmdPath) {
-      const text = await readText(p);
-      includes.set(p, text);
-      const basename = p.split("/").pop()!;
-      if (!includes.has(basename)) includes.set(basename, text);
-    }
-  }
-
-  return { qmd, stylesheet, stylesheetIsPrecompiled, bib, assets, includes };
-}
-
-function pickFirst<T>(arr: T[], pred: (v: T) => boolean): T | null {
-  for (const v of arr) if (pred(v)) return v;
-  return null;
+export function buildRenderInputs(qmdPath: string): Promise<RenderInputs> {
+  return coreBuildRenderInputs(qmdPath, idbProjectFS);
 }
