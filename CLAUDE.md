@@ -76,6 +76,19 @@ cli/                                   the `slipway` command (Node)
   scripts/build.mjs                    esbuild → dist/slipway.mjs, copies
                                        pandoc.wasm next to it
   test/cli.test.ts                     in-process + built-artifact tests
+vscode/                                the VS Code web extension
+  package.json                         the extension manifest (publisher
+                                       darribas; browser + main → dist/)
+  src/extension.ts                     activate(): load pandoc, commands
+  src/renderer.ts, src/project.ts      pandoc instance + render queue;
+                                       workspace.fs ProjectFS, project root
+  src/preview.ts, src/webview.ts       webview panels; CSP + reveal bridge
+  scripts/build.mjs                    esbuild (browser, cjs) → dist/
+  test/                                unit tests + the built bundle driven
+                                       through a fake `vscode` (fake-vscode.ts)
+  test-web/                            separate package: the bundle inside
+                                       real VS Code for the Web (CI only —
+                                       needs to download VS Code)
 .github/workflows/                     deploy.yml + ci.yml
 ```
 
@@ -94,7 +107,7 @@ working on.
   message. The user has a strong preference for shipping each increment as
   its own merge to `main` rather than batching.
 - **Tests must stay green.** `cd core && npm test` (renderer + goldens),
-  `cd app && npm test` and `cd cli && npm test`. CI gates merges via `.github/workflows/ci.yml`;
+  `cd app && npm test`, `cd cli && npm test` and `cd vscode && npm test`. CI gates merges via `.github/workflows/ci.yml`;
   deploy re-runs the tests before publishing. When you change the renderer,
   add an assertion to `core/test/render.test.ts` that locks the behaviour
   down. If the change intentionally alters rendered HTML, re-record the
@@ -141,6 +154,12 @@ working on.
 - **Don't import `.css` / `.scss` with `?raw` in code under test.** Vitest's
   CSS plugin wins over `?raw` and yields an empty string (this hid empty
   reveal stylesheets in the test renders until increment 4.0a).
+- **The extension host has no DOM and no Node.** `vscode/` is bundled with
+  esbuild `platform: "browser"` and a plugin that fails the build on any
+  Node built-in import; all file I/O goes through `vscode.workspace.fs`
+  with Uris (never assume `file:`). `vscode/test-web` cannot run in this
+  sandbox (VS Code's download hosts are blocked) — run the `CI` workflow
+  on the branch (it has `workflow_dispatch`) to exercise it.
 - **`pandoc.wasm` is 58 MB.** First load is heavy. The dev plugin in
   `vite.config.ts` serves it through middleware in dev and emits it as a
   hashed asset at build.

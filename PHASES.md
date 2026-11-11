@@ -842,6 +842,27 @@ Each prints PASS/FAIL lines with timings and saves `report-*.txt`. Step-by-step 
 
 **Outcome so far:** S2 and S3 pass in emulation; device run pending. Per the issue's decision rule, nothing further is built on the a-Shell route (4.3) until Dani has run the kit and the results are recorded here.
 
+### Increment 4.4: VS Code web extension — scaffold, pandoc at activation, preview, render-on-save
+
+New package `vscode/`: a web extension (`"browser": "./dist/extension.js"`, `"main"` pointing at the same bundle for desktop), publisher `darribas`, `engines.vscode ^1.85.0`, activation on `onLanguage:quarto` and `onWebviewPanel:slipway.preview`, contributing the `quarto` language for `.qmd` (no grammar).
+
+- **Build.** esbuild `platform: "browser"`, `format: "cjs"`, `external: ["vscode"]`, plus a plugin that fails the build on any Node built-in import anywhere in the graph. Output: `dist/extension.js` (4.2 MB — core, Dart Sass, reveal.js, KaTeX and fonts inline) and `dist/pandoc.wasm` copied beside it.
+- **Pandoc at activation.** `activate()` awaits `workspace.fs.readFile(extensionUri/dist/pandoc.wasm)` + `createPandocInstance` under a "Slipway: loading renderer…" notification, falling back to `fetch` of the same URL if the host doesn't expose the extension folder through `workspace.fs` (still at activation). Nothing is loaded lazily afterwards. The load time is logged to a "Slipway" output channel.
+- **Project files.** A `ProjectFS` over `workspace.fs`: root = the workspace folder containing the deck (else the deck's folder); file list via `findFiles` with a fallback to walking `workspace.fs.readDirectory` when the file system has no search provider; the same ignore rule as the CLI (hidden folders, `node_modules`) and the same sort, so all surfaces see the same project. The list is cached and dropped by a `FileSystemWatcher`, but the cache is only trusted on `file:` roots — on virtual file systems (blink-fs) every render re-lists, since watchers may not fire there. Open editors are read from their buffers.
+- **Preview.** One `WebviewPanel` per deck (`retainContextWhenHidden`, scripts on, no local resource roots). `webview.html` is the rendered deck plus two injections (`src/webview.ts`): the CSP meta from the issue, first in `<head>`, and a bridge script before the last `</body>` that posts `ready` / `slideChanged {h,v}`, obeys `goto {h,v}`, and restores the slide the previous render was on. A failed render (Sass or pandoc) leaves the last good render on screen.
+- **Commands and trigger.** `slipway.previewToSide` (editor title button on `.qmd`), `slipway.preview`, `slipway.render`; `slipway.renderOn` = `save` (default) or `manual`. Saving *any* non-ignored file in a deck's project re-renders that deck (so saving the theme updates the preview); requests arriving mid-render collapse into one follow-up render.
+
+**Tests.**
+
+- `vscode/test/unit.test.ts` — paths and the webview HTML builder (CSP position and content, bridge placement after an inlined `"</body>"` literal, the deck left byte-for-byte intact).
+- `vscode/test/extension.test.ts` — the **built bundle** loaded in Node against a fake `vscode` module (`fake-vscode.ts`: real Uris, a workspace over a temp copy of the demo project, documents, panels, commands). Covers: pandoc.wasm read exactly once during `activate()`; every contributed command registered; `previewToSide` opens one panel and the rendered HTML's SHA-256 equals **core's golden** (demo deck and the Imago showcase with its `../assets` theme + fonts); one render per save; theme save re-renders; a burst of four saves → two renders; `manual` mode ignores saves and renders the unsaved buffer on command; a Sass error keeps the last good render; slide position survives a re-render. 21 tests.
+- `vscode/scripts/check-webview.cjs` (manual, Playwright) — the preview document in headless Chromium under its CSP with every network request refused: reveal.js boots (29 slides), the start position is restored, `slideChanged` is posted, `goto` moves the deck, KaTeX's `data:` fonts load, the theme applies, no requests are attempted, no page errors. One CSP violation is reported and is expected: reveal's own `white.css` begins with `@import url(./fonts/source-sans-pro/…)`, a relative URL that cannot resolve once the stylesheet is inlined (it fails the same way in the PWA's iframe). The CSP refusing it is the wanted behaviour. Stripping that dead import in core would change the goldens for every surface, so it is left alone and noted under cleanup.
+- `vscode/test-web/` — a separate small package running the bundle inside **real VS Code for the Web** with `@vscode/test-web` (headless Chromium, the demo project mounted as a virtual file system): activation loads pandoc; after activation the suite replaces `fetch` / `XMLHttpRequest` / `importScripts` / `WebSocket` in the extension host with functions that throw and record; `previewToSide` opens a panel and renders the golden HTML; the Imago showcase resolves through the virtual FS; saving triggers exactly one render; nothing touched the network. **This suite could not be run in the authoring sandbox** (VS Code's download hosts are blocked by its network policy); it runs in the new `vscode` CI job. See 4.4a for its first CI run.
+
+`ci.yml` gains the `vscode` job (unit + bundle tests, then test-web).
+
+**Not in this increment (4.5):** export commands, cursor sync and its toggle, diagnostics in the Problems panel, the remaining settings (`type` trigger, `debounceMs`, `exportPath`, `projectRoot` is already read), the panel serializer.
+
 -----
 
 ## Repo cleanup (deferred)
@@ -850,6 +871,7 @@ Small tidy-ups to land at the next natural stopping point — none are blocking,
 
 - **Fix Dockview light/dark theme cascade** (the increment 2 cosmetic gap). Drive the dock theme from the same CSS variables as the toolbar instead of `prefers-color-scheme` on the dock host.
 - **Migrate `imago.scss` off `darken()`/`lighten()`.** Both are deprecated in Dart Sass; output is correct today but each render emits warnings. The file now lives in `test/fixtures/imago-workshop/` — a frozen test fixture, so low urgency, but the warnings still surface in test output.
+- **reveal.js's dead font `@import`.** `white.css` / `black.css` start with `@import url(./fonts/source-sans-pro/source-sans-pro.css)`, which can't resolve once inlined (PWA iframe, exported HTML, VS Code webview alike), so decks never get Source Sans Pro from it and browsers log a failed/blocked load. Either strip the import in `inline-assets.ts` or inline the font; both change rendered bytes for every surface (re-record goldens).
 - **Clean up `test/` directory naming** if we add more test types (right now it's `smoke.test.ts` plus `fixtures/`; if unit tests grow, organise into `test/unit/` and `test/smoke/`).
 - **PHASES.md increment ordering.** Within Phase 2 the increment 5e–8 blocks sit in descending order (8, 7, 6, 5e) rather than ship order, which works against CLAUDE.md's "read bottom-up for most recent" guidance. Increments 10+ are in ascending ship order; reordering that older batch to match is a deferred tidy-up.
 
