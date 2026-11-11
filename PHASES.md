@@ -879,6 +879,12 @@ The step then failed for a reason in the test, not the extension: the suite's "c
 
 **Tests** (fake-`vscode` bundle suite, now 38 with the unit tests): the exported file's hash equals core's golden and contains no external script, stylesheet or CSS `url(http…)`; `exportPath` and the explorer-menu Uri argument; print export; failed export writes nothing; cursor moves produce exactly one `goto` per slide change with the indices pandoc would assign, and none when sync is off or the deck has no preview; an error diagnostic appears and clears; a missing citation is a Warning while "Loaded references.bib" is not shown; `type` mode renders once per burst and saving doesn't double it; the serializer restores deck and position. The test-web suite also exports through the virtual file system and checks the same properties.
 
+### Increment 4.5a: only re-render decks a saved file actually affects
+
+Second CI run in real VS Code for the Web: activation 675 ms (pandoc 496 ms); `previewToSide` rendered HTML **identical to the golden through the virtual file system**; the Imago showcase resolved its `../assets` theme, fonts and bibliography the same way. Then the suite's "saving triggers exactly one render" failed with two — and that was the extension, not the test: with two previews open in one folder, saving `slide.qmd` also re-rendered the showcase, because 4.4 treated every file in the project as a dependency of every open deck (another `.qmd` *might* be an include).
+
+New rule (`affectsDeck` in `src/paths.ts`): the deck itself, and themes / bibliographies / images / fonts anywhere in the project, always trigger a re-render (those are resolved forgivingly project-wide, so any may matter); another markdown file only does if the deck's source includes it with `{{< include >}}` (matched by path or basename, like the renderer does); ignored folders and exported `.html` never do. Unit-tested, plus a bundle test with two previews open: saving one deck renders only it, and saving `_snippet.qmd` renders only the deck that includes it. The test-web assertion now checks which deck rendered, not just how many. vscode: 42 tests.
+
 -----
 
 ## Repo cleanup (deferred)

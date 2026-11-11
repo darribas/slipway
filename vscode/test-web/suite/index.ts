@@ -145,7 +145,10 @@ export async function run(): Promise<void> {
   log("imago showcase: theme, fonts and bibliography resolved through the virtual file system");
 
   // --- saving triggers exactly one render -------------------------------------
+  //     (two previews are open; only the saved deck's may re-render)
   await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+  const renderedDecks: string[] = [];
+  const watching = api.onDidRender((e) => void renderedDecks.push(e.deck.path));
   const before = api.renderCount();
   const edit = new vscode.WorkspaceEdit();
   edit.insert(deck, new vscode.Position(doc.lineCount, 0), "\n## Added by the test\n\nSaved from VS Code for the Web.\n");
@@ -157,7 +160,11 @@ export async function run(): Promise<void> {
   const event = await rendered;
   assert(event.ok, `the render after saving succeeded (${event.error ?? ""})`);
   await sleep(1500);
-  assert(api.renderCount() === before + 1, `saving triggered exactly one render (got ${api.renderCount() - before})`);
+  watching.dispose();
+  assert(
+    api.renderCount() === before + 1 && renderedDecks.length === 1 && renderedDecks[0] === deck.path,
+    `saving triggered exactly one render, of the saved deck (got ${JSON.stringify(renderedDecks)})`,
+  );
   assert(api.lastHtml(deck)?.includes("Added by the test"), "the new render has the saved content");
   log("save: exactly one render, with the new content");
 

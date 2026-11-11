@@ -397,3 +397,35 @@ describe("panel serializer", () => {
     expect(host.panels).toHaveLength(before);
   });
 });
+
+describe("two decks open in the same project", () => {
+  test("saving one deck re-renders only that deck; saving an include re-renders only the deck that uses it", async () => {
+    const slide = host.documents.find((d) => d.uri.path.endsWith("demos/slide.qmd"))!;
+    const showcase = host.openDocument("demos/imago-showcase.qmd");
+    await vscode.commands.executeCommand("slipway.previewToSide");
+    await settle();
+    const rendered: string[] = [];
+    const sub = (api as unknown as { onDidRender(l: (e: { deck: { path: string } }) => void): { dispose(): void } }).onDidRender(
+      (e) => void rendered.push(e.deck.path.split("/").pop()!),
+    );
+
+    host.save(slide);
+    await nextRender();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(rendered).toEqual(["slide.qmd"]);
+
+    rendered.length = 0;
+    const snippet = host.openDocument("demos/_snippet.qmd"); // slide.qmd includes it; the showcase does not
+    host.save(snippet);
+    await nextRender();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(rendered).toEqual(["slide.qmd"]);
+
+    rendered.length = 0;
+    host.save(showcase);
+    await nextRender();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(rendered).toEqual(["imago-showcase.qmd"]);
+    sub.dispose();
+  }, 60_000);
+});

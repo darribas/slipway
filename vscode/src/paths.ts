@@ -77,3 +77,26 @@ export function expandExportPath(template: string, deckPath: string, workspaceFo
 export function printVariantPath(htmlPath: string): string {
   return /\.html?$/i.test(htmlPath) ? htmlPath.replace(/(\.html?)$/i, ".print$1") : htmlPath + ".print.html";
 }
+
+/**
+ * Does a change to project file `changedPath` call for re-rendering a deck
+ * whose source is `deckSource`? (Both paths are project-relative.)
+ *
+ * Themes, bibliographies, images and fonts are resolved forgivingly across
+ * the whole project, so any of those may matter. Another markdown file only
+ * matters if the deck pulls it in with `{{< include >}}` — otherwise saving
+ * one deck would needlessly re-render every other open deck in the folder.
+ */
+export function affectsDeck(changedPath: string, deckPath: string, deckSource: string | undefined): boolean {
+  if (changedPath === deckPath) return true;
+  if (isIgnoredProjectPath(changedPath)) return false;
+  const ext = extname(changedPath).toLowerCase();
+  if (ext === ".html" || ext === ".htm") return false; // exports, not inputs
+  if (ext !== ".qmd" && ext !== ".md" && ext !== ".markdown") return true;
+  if (deckSource === undefined) return true; // not rendered yet: be safe
+  const name = basename(changedPath);
+  for (const match of deckSource.matchAll(/\{\{<\s*include\s+([^\s>]+)\s*>\}\}/g)) {
+    if (match[1] === changedPath || basename(match[1]) === name) return true;
+  }
+  return false;
+}

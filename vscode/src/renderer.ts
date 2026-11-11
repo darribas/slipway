@@ -16,6 +16,8 @@ export class Renderer implements vscode.Disposable {
   wasmBytes = 0;
   /** The include map of each deck's most recent render (for slideMap). */
   readonly includes = new Map<string, Map<string, string>>();
+  /** Each deck's source as of its most recent render. */
+  readonly sources = new Map<string, string>();
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -62,6 +64,7 @@ export class Renderer implements vscode.Disposable {
       if (!path) throw new Error(`${deck.toString(true)} is not inside its project root ${root.toString(true)}`);
       const inputs = await buildRenderInputs(path, workspaceProjectFS(this.indexFor(root)));
       this.includes.set(deck.toString(), inputs.includes);
+      this.sources.set(deck.toString(), inputs.qmd);
       return renderDeck(this.pandoc, inputs);
     };
     const result = this.queue.then(run, run);

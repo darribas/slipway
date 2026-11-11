@@ -131,3 +131,27 @@ describe("webview state for the serializer", () => {
     expect(out).toContain("\\u003c/script>");
   });
 });
+
+describe("affectsDeck", () => {
+  const src = "---\ntitle: T\n---\n\n# A\n\n{{< include _snippet.qmd >}}\n\n{{< include parts/intro.md >}}\n";
+  test("the deck itself, themes, bibliographies and images always do", async () => {
+    const { affectsDeck } = await import("../src/paths");
+    for (const p of ["demos/deck.qmd", "theme.scss", "assets/x.css", "refs.bib", "assets/pic.png", "assets/fonts/a.woff2"]) {
+      expect(affectsDeck(p, "demos/deck.qmd", src), p).toBe(true);
+    }
+  });
+  test("another markdown file only if the deck includes it", async () => {
+    const { affectsDeck } = await import("../src/paths");
+    expect(affectsDeck("demos/_snippet.qmd", "demos/deck.qmd", src)).toBe(true); // by basename
+    expect(affectsDeck("parts/intro.md", "demos/deck.qmd", src)).toBe(true); // by path
+    expect(affectsDeck("demos/other-deck.qmd", "demos/deck.qmd", src)).toBe(false);
+    expect(affectsDeck("README.md", "demos/deck.qmd", src)).toBe(false);
+    expect(affectsDeck("demos/other-deck.qmd", "demos/deck.qmd", undefined)).toBe(true); // unknown source: be safe
+  });
+  test("ignored folders and exported HTML never do", async () => {
+    const { affectsDeck } = await import("../src/paths");
+    expect(affectsDeck(".git/x.scss", "deck.qmd", src)).toBe(false);
+    expect(affectsDeck("node_modules/p/theme.scss", "deck.qmd", src)).toBe(false);
+    expect(affectsDeck("deck.html", "deck.qmd", src)).toBe(false);
+  });
+});

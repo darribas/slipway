@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import { buildPrintVariant, slideAtLine, slideMap } from "@slipway/core";
 
-import { basename, expandExportPath, isIgnoredProjectPath, printVariantPath } from "./paths";
+import { affectsDeck, basename, expandExportPath, printVariantPath } from "./paths";
 import { projectPathOf, projectRootFor } from "./project";
 import { PreviewManager, VIEW_TYPE } from "./preview";
 import type { RenderEvent } from "./preview";
@@ -66,13 +66,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<Slipwa
 
   const renderMode = (uri: vscode.Uri) => vscode.workspace.getConfiguration("slipway", uri).get<string>("renderOn", "save");
 
-  /** Decks with an open preview whose project contains `file` (ignoring hidden folders etc.). */
+  /** Decks with an open preview that a change to `file` should re-render. */
   const decksAffectedBy = (file: vscode.Uri): vscode.Uri[] =>
     previews
       .previewsAffectedBy(file)
       .filter((preview) => {
-        const rel = projectPathOf(preview.root, file);
-        return !(rel && isIgnoredProjectPath(rel));
+        const changed = projectPathOf(preview.root, file);
+        const deckPath = projectPathOf(preview.root, preview.deck);
+        if (!changed || !deckPath) return preview.deck.toString() === file.toString();
+        const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === preview.deck.toString());
+        return affectsDeck(changed, deckPath, open?.getText() ?? renderer.sources.get(preview.deck.toString()));
       })
       .map((preview) => preview.deck);
 
