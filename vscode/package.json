@@ -1,7 +1,7 @@
 {
   "name": "slipway",
   "displayName": "Slipway",
-  "description": "Preview and export Quarto-flavoured reveal.js decks (.qmd) — rendered locally in the editor, offline once loaded. Same renderer as the Slipway PWA.",
+  "description": "Preview and export Quarto-flavoured reveal.js decks (.qmd) \u2014 rendered locally in the editor, offline once loaded. Same renderer as the Slipway PWA.",
   "version": "0.1.0",
   "publisher": "darribas",
   "license": "MIT",
@@ -67,6 +67,22 @@
         "title": "Render",
         "category": "Slipway",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "slipway.exportHtml",
+        "title": "Export HTML",
+        "category": "Slipway"
+      },
+      {
+        "command": "slipway.exportPrintHtml",
+        "title": "Export Print HTML",
+        "category": "Slipway"
+      },
+      {
+        "command": "slipway.toggleSync",
+        "title": "Toggle Cursor Sync",
+        "category": "Slipway",
+        "icon": "$(sync)"
       }
     ],
     "menus": {
@@ -80,6 +96,11 @@
           "command": "slipway.render",
           "when": "activeWebviewPanelId == 'slipway.preview'",
           "group": "navigation@1"
+        },
+        {
+          "command": "slipway.toggleSync",
+          "when": "activeWebviewPanelId == 'slipway.preview'",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [
@@ -90,6 +111,28 @@
         {
           "command": "slipway.preview",
           "when": "editorLangId == quarto"
+        },
+        {
+          "command": "slipway.exportHtml",
+          "when": "editorLangId == quarto || activeWebviewPanelId == 'slipway.preview'"
+        },
+        {
+          "command": "slipway.exportPrintHtml",
+          "when": "editorLangId == quarto || activeWebviewPanelId == 'slipway.preview'"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "slipway.exportHtml",
+          "when": "resourceExtname == .qmd",
+          "group": "slipway"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "slipway.exportHtml",
+          "when": "resourceExtname == .qmd",
+          "group": "slipway"
         }
       ]
     },
@@ -100,14 +143,37 @@
           "type": "string",
           "enum": [
             "save",
-            "manual"
+            "manual",
+            "type"
           ],
           "enumDescriptions": [
             "Re-render open previews when a file in the deck's project is saved.",
-            "Render only when the Slipway: Render command is run."
+            "Render only when the Slipway: Render command is run.",
+            "Re-render while typing, after slipway.debounceMs of quiet."
           ],
           "default": "save",
           "description": "When open previews are re-rendered."
+        },
+        "slipway.debounceMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 200,
+          "description": "With renderOn: \"type\", how long to wait after the last keystroke before rendering. A render takes about 1.5 s, so lower values mostly queue work."
+        },
+        "slipway.syncCursor": {
+          "type": "boolean",
+          "default": true,
+          "description": "Move the preview to the slide under the editor cursor."
+        },
+        "slipway.exportPath": {
+          "type": "string",
+          "default": "${fileDirname}/${fileBasenameNoExtension}.html",
+          "description": "Where Export HTML writes. Supports ${fileDirname}, ${fileBasename}, ${fileBasenameNoExtension}, ${fileExtname} and ${workspaceFolder}; a relative path is relative to the deck's folder."
+        },
+        "slipway.projectRoot": {
+          "type": "string",
+          "default": "",
+          "description": "The folder searched for the deck's theme, bibliography, images, fonts and includes. Empty means the workspace folder that contains the deck. A relative path is relative to that workspace folder."
         }
       }
     }

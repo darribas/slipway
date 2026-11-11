@@ -80,6 +80,7 @@ export class PreviewManager implements vscode.Disposable {
 
   /** Wire up a panel (new, or handed back by VS Code after a reload). */
   adopt(deck: vscode.Uri, panel: vscode.WebviewPanel, position: SlidePosition | null): void {
+    panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     const preview: Preview = {
       deck,
       root: projectRootFor(deck),
@@ -146,7 +147,7 @@ export class PreviewManager implements vscode.Disposable {
         return;
       }
       preview.html = result.html;
-      preview.panel.webview.html = buildWebviewHtml(result.html, preview.position);
+      preview.panel.webview.html = buildWebviewHtml(result.html, preview.position, preview.deck.toString());
       this.log(`${name}: rendered in ${Math.round(result.durationMs)} ms (${(result.html.length / 1024).toFixed(0)} kB)`);
       vscode.window.setStatusBarMessage(`Slipway: rendered ${name} in ${(result.durationMs / 1000).toFixed(1)} s`, 4000);
       this.didRender.fire({ deck: preview.deck, ok: true, result });

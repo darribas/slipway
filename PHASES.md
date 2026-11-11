@@ -863,6 +863,22 @@ New package `vscode/`: a web extension (`"browser": "./dist/extension.js"`, `"ma
 
 **Not in this increment (4.5):** export commands, cursor sync and its toggle, diagnostics in the Problems panel, the remaining settings (`type` trigger, `debounceMs`, `exportPath`, `projectRoot` is already read), the panel serializer.
 
+### Increment 4.4a: first run in real VS Code for the Web (CI)
+
+The `CI` workflow was dispatched on the branch to run what the sandbox can't. `core`, `app`, `cli` and the extension's unit + bundle tests were green on GitHub's runners. In the `@vscode/test-web` step — real VS Code for the Web, headless Chromium, the extension served over HTTP exactly as Pages will serve it — the extension **activated in 888 ms, of which loading + instantiating the 58 MB `pandoc.wasm` took 646 ms** (localhost, so no real network latency; the iPad number comes in 4.7).
+
+The step then failed for a reason in the test, not the extension: the suite's "cut the network after activation" replaced `fetch` in the extension host, but in `@vscode/test-web` the workspace's virtual file system is itself an extension in that same worker, serving files with `fetch()` from the test server's `/static/mount`. Opening the deck therefore failed. The cut now lets exactly those workspace-mount reads through (and counts them) and refuses and records everything else. Fix shipped with 4.5.
+
+### Increment 4.5: Extension — export, cursor sync, diagnostics, settings, serializer
+
+- **Export.** `slipway.exportHtml` (palette; editor and explorer context menus on `.qmd`) renders the deck fresh and writes the self-contained HTML through `workspace.fs` to `slipway.exportPath` (default `${fileDirname}/${fileBasenameNoExtension}.html`; supports `${fileDirname}`, `${fileBasename}`, `${fileBasenameNoExtension}`, `${fileExtname}`, `${workspaceFolder}`; relative paths are relative to the deck). It works with or without an open preview and doesn't count as a preview render. `slipway.exportPrintHtml` (the issue's v1.x item — it was one call to `buildPrintVariant`) writes `<name>.print.html` beside it. A failed render writes nothing and reports why.
+- **Cursor sync.** `onDidChangeTextEditorSelection` → `slideMap` (with the include map from the deck's last render) → `slideAtLine` → `goto {h,v}` to the preview, sent only when the slide changes. `slipway.toggleSync` (preview title bar) flips `slipway.syncCursor`.
+- **Diagnostics.** A `slipway` `DiagnosticCollection` on the deck: a failed render (Sass error, pandoc error) is an Error; pandoc and Sass warnings are Warnings; informational notes (loaded bibliography, Sass deprecations) stay in the output channel. Neither pandoc nor the pipeline reports source lines, so everything sits on line 1. A clean render clears them.
+- **Settings.** `slipway.renderOn` gains `"type"` (debounced by `slipway.debounceMs`, default 1000, floor 200); `slipway.syncCursor`, `slipway.exportPath`, `slipway.projectRoot` (relative to the workspace folder, absolute, or a full URI; ignored if it doesn't contain the deck).
+- **Serializer.** The bridge keeps `{deck, h, v}` in the webview's persisted state; a `WebviewPanelSerializer` re-adopts the panel after a window reload, re-renders, and returns to the slide. A panel with no usable state is closed rather than left blank. (After a reload the extension activates again and re-reads `pandoc.wasm`, which is why this only helps online, as the issue says.)
+
+**Tests** (fake-`vscode` bundle suite, now 38 with the unit tests): the exported file's hash equals core's golden and contains no external script, stylesheet or CSS `url(http…)`; `exportPath` and the explorer-menu Uri argument; print export; failed export writes nothing; cursor moves produce exactly one `goto` per slide change with the indices pandoc would assign, and none when sync is off or the deck has no preview; an error diagnostic appears and clears; a missing citation is a Warning while "Loaded references.bib" is not shown; `type` mode renders once per burst and saving doesn't double it; the serializer restores deck and position. The test-web suite also exports through the virtual file system and checks the same properties.
+
 -----
 
 ## Repo cleanup (deferred)

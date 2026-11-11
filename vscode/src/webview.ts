@@ -31,14 +31,22 @@ export type HostMessage = { type: "goto"; h: number; v: number };
  *   - restores the slide the previous render was on (a re-render replaces the
  *     whole document, so the position has to be carried across);
  *   - posts `slideChanged {h, v}` whenever the presenter moves;
- *   - obeys `goto {h, v}` from the extension (editor cursor → slide).
+ *   - obeys `goto {h, v}` from the extension (editor cursor → slide);
+ *   - keeps `{deck, h, v}` in the webview's persisted state, which is what VS
+ *     Code hands the panel serializer to bring a preview back after a window
+ *     reload.
  */
-function bridgeScript(start: SlidePosition | null): string {
+function bridgeScript(start: SlidePosition | null, deck: string | null): string {
   return `<script data-from="slipway:vscode-bridge">
 (function () {
   var vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
   var start = ${JSON.stringify(start)};
-  function post(message) { if (vscode) vscode.postMessage(message); }
+  var deck = ${JSON.stringify(deck).replace(/</g, "\\u003c")};
+  function post(message) {
+    if (!vscode) return;
+    if (deck) vscode.setState({ deck: deck, h: message.h, v: message.v });
+    vscode.postMessage(message);
+  }
   function wire() {
     if (start) { try { Reveal.slide(start.h, start.v); } catch (e) {} }
     var now = Reveal.getIndices();
@@ -70,7 +78,7 @@ function bridgeScript(start: SlidePosition | null): string {
  * The deck HTML itself is untouched otherwise — what the preview shows is
  * what Export HTML writes, plus these two blocks.
  */
-export function buildWebviewHtml(html: string, start: SlidePosition | null = null): string {
+export function buildWebviewHtml(html: string, start: SlidePosition | null = null, deck: string | null = null): string {
   const csp = `<meta http-equiv="Content-Security-Policy" content="${WEBVIEW_CSP}">`;
   // First <head> only — a replacement function, so `$` in the HTML is inert.
   let out = html.replace(/<head(\s[^>]*)?>/, (m) => `${m}\n  ${csp}`);
@@ -78,7 +86,7 @@ export function buildWebviewHtml(html: string, start: SlidePosition | null = nul
 
   // Before the LAST </body>: inlined reveal plugins contain "</body>" as a
   // string literal, so a first-match insert would land inside a script.
-  const bridge = bridgeScript(start);
+  const bridge = bridgeScript(start, deck);
   const lastBody = out.lastIndexOf("</body>");
   return lastBody < 0 ? out + bridge : out.slice(0, lastBody) + bridge + "\n" + out.slice(lastBody);
 }

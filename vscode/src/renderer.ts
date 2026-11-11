@@ -14,6 +14,8 @@ export class Renderer implements vscode.Disposable {
   /** How long loading + instantiating pandoc.wasm took, for the log. */
   loadMs = 0;
   wasmBytes = 0;
+  /** The include map of each deck's most recent render (for slideMap). */
+  readonly includes = new Map<string, Map<string, string>>();
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -59,6 +61,7 @@ export class Renderer implements vscode.Disposable {
       const path = projectPathOf(root, deck);
       if (!path) throw new Error(`${deck.toString(true)} is not inside its project root ${root.toString(true)}`);
       const inputs = await buildRenderInputs(path, workspaceProjectFS(this.indexFor(root)));
+      this.includes.set(deck.toString(), inputs.includes);
       return renderDeck(this.pandoc, inputs);
     };
     const result = this.queue.then(run, run);

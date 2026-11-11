@@ -66,7 +66,7 @@ export function createFakeVscode(workspaceRoot: string, extensionRoot: string) {
   const commands = new Map<string, (...args: unknown[]) => unknown>();
   const serializers = new Map<string, { deserializeWebviewPanel(panel: FakePanel, state: unknown): Promise<void> }>();
   const didSave = new EventEmitter<FakeDocument>();
-  const didChange = new EventEmitter<{ document: FakeDocument }>();
+  const didChange = new EventEmitter<{ document: FakeDocument; contentChanges: unknown[] }>();
   const didChangeSelection = new EventEmitter<unknown>();
   const diagnostics = new Map<string, unknown[]>();
   const messages: string[] = [];
@@ -133,6 +133,7 @@ export function createFakeVscode(workspaceRoot: string, extensionRoot: string) {
     ProgressLocation: { Notification: 15, Window: 10 },
     FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
     UIKind: { Desktop: 1, Web: 2 },
+    ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
     env: { uiKind: 1 },
     workspace: {
       fs: {
@@ -161,6 +162,7 @@ export function createFakeVscode(workspaceRoot: string, extensionRoot: string) {
         uri.path.startsWith(rootUri.path + "/") ? { uri: rootUri, name: "ws", index: 0 } : undefined,
       getConfiguration: (_section: string) => ({
         get: <T>(key: string, fallback: T): T => (key in config ? (config[key] as T) : fallback),
+        update: async (key: string, value: unknown) => void (config[key] = value),
       }),
       get textDocuments() {
         return documents;
@@ -241,7 +243,7 @@ export function createFakeVscode(workspaceRoot: string, extensionRoot: string) {
         setText(t: string) {
           text = t;
           doc.isDirty = true;
-          didChange.fire({ document: doc });
+          didChange.fire({ document: doc, contentChanges: [{ text: t }] });
         },
       };
       documents.push(doc);

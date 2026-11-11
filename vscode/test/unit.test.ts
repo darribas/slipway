@@ -96,3 +96,38 @@ describe("buildWebviewHtml", () => {
     expect(out).not.toContain("script-src");
   });
 });
+
+describe("export paths", () => {
+  test("default template: next to the deck", async () => {
+    const { expandExportPath } = await import("../src/paths");
+    expect(expandExportPath("${fileDirname}/${fileBasenameNoExtension}.html", "/ws/slides/deck.qmd", "/ws")).toBe("/ws/slides/deck.html");
+    expect(expandExportPath("", "/ws/slides/deck.qmd", "/ws")).toBe("/ws/slides/deck.html");
+  });
+
+  test("workspace-relative, deck-relative and parent-relative templates", async () => {
+    const { expandExportPath } = await import("../src/paths");
+    expect(expandExportPath("${workspaceFolder}/out/${fileBasenameNoExtension}.html", "/ws/slides/deck.qmd", "/ws")).toBe("/ws/out/deck.html");
+    expect(expandExportPath("rendered/${fileBasename}.html", "/ws/slides/deck.qmd", "/ws")).toBe("/ws/slides/rendered/deck.qmd.html");
+    expect(expandExportPath("../public/index.html", "/ws/slides/deck.qmd", "/ws")).toBe("/ws/public/index.html");
+    // No workspace folder (a single file was opened): fall back to the deck's folder.
+    expect(expandExportPath("${workspaceFolder}/x.html", "/tmp/deck.qmd", null)).toBe("/tmp/x.html");
+    // Unknown variables are left alone rather than silently dropped.
+    expect(expandExportPath("${fileDirname}/${nope}.html", "/ws/deck.qmd", "/ws")).toBe("/ws/${nope}.html");
+  });
+
+  test("print variant name", async () => {
+    const { printVariantPath } = await import("../src/paths");
+    expect(printVariantPath("/ws/deck.html")).toBe("/ws/deck.print.html");
+    expect(printVariantPath("/ws/deck")).toBe("/ws/deck.print.html");
+  });
+});
+
+describe("webview state for the serializer", () => {
+  test("the bridge persists {deck, h, v} and a hostile deck URI cannot break out of the script", () => {
+    const html = "<html><head></head><body></body></html>";
+    const out = buildWebviewHtml(html, null, "vscode-vfs://host/a</script><script>alert(1)//.qmd");
+    expect(out).toContain("vscode.setState({ deck: deck, h: message.h, v: message.v })");
+    expect(out).not.toContain("</script><script>alert(1)");
+    expect(out).toContain("\\u003c/script>");
+  });
+});

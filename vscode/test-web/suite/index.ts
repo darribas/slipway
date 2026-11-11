@@ -52,17 +52,31 @@ function previewTabs(): vscode.Tab[] {
 
 /**
  * From here on, anything in the extension host that tries to reach the
- * network fails loudly. (File access is unaffected: workspace.fs calls are
- * RPC to the workbench, not network calls from this worker.)
+ * network fails loudly and is recorded.
+ *
+ * One exception, which is the test harness's and not the extension's: in
+ * @vscode/test-web the workspace's virtual file system is itself an
+ * extension in this same worker, serving files with fetch() from the local
+ * test server under /static/mount. Those requests are the "disk" here, so
+ * they pass; every other URL is refused.
  */
 const blocked: string[] = [];
+let mountReads = 0;
 function cutTheNetwork(): void {
   const g = globalThis as Record<string, unknown>;
   const refuse = (what: string) => (...args: unknown[]) => {
     blocked.push(`${what}(${String(args[0]).slice(0, 120)})`);
     throw new Error(`network is cut for this test: ${what}`);
   };
-  g.fetch = refuse("fetch");
+  const realFetch = (g.fetch as typeof fetch).bind(globalThis);
+  g.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (new URL(url, "http://localhost").pathname.startsWith("/static/mount")) {
+      mountReads += 1;
+      return realFetch(input, init);
+    }
+    return refuse("fetch")(url);
+  };
   g.importScripts = refuse("importScripts");
   g.XMLHttpRequest = class {
     constructor() {
@@ -103,7 +117,7 @@ export async function run(): Promise<void> {
 
   // Everything below must work with the extension host offline.
   cutTheNetwork();
-  log("network cut for the extension host");
+  log("network cut for the extension host (workspace mount excepted)");
 
   // --- previewToSide opens a panel and renders the golden HTML ----------------
   const deck = vscode.Uri.joinPath(folder.uri, "demos/slide.qmd");
@@ -152,6 +166,22 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand("slipway.render", deck);
   assert((await manual).ok, "Slipway: Render succeeded");
 
+  // --- Export HTML writes a self-contained file ---------------------------------
+  await vscode.commands.executeCommand("slipway.exportHtml", showcase);
+  const exported = vscode.Uri.joinPath(folder.uri, "demos/imago-showcase.html");
+  const bytes = await vscode.workspace.fs.readFile(exported);
+  const out = new TextDecoder().decode(bytes);
+  assert((await sha256(out)) === __GOLDEN_IMAGO_SHOWCASE__, "the exported file is the golden HTML");
+  assert(!/<script[^>]+src=["']https?:/i.test(out), "no external scripts in the export");
+  assert(!/<link[^>]+href=["']https?:/i.test(out), "no external stylesheets in the export");
+  assert(!/url\(\s*["']?https?:/i.test(out), "no http(s) url() in the export's CSS");
+  log(`exportHtml: wrote ${bytes.byteLength} bytes, self-contained`);
+
+  // --- cursor sync and the remaining commands exist -----------------------------
+  for (const id of ["slipway.exportHtml", "slipway.exportPrintHtml", "slipway.toggleSync"]) {
+    assert(commands.includes(id), `command ${id} is registered`);
+  }
+
   assert(blocked.length === 0, `the extension made no network attempts after activation (saw: ${blocked.join(", ")})`);
-  log("no network attempts after activation");
+  log(`no network attempts after activation (${mountReads} workspace-file reads went through the harness's mount)`);
 }

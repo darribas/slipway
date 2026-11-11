@@ -31,3 +31,49 @@ export function dirname(path: string): string {
   const i = path.lastIndexOf("/");
   return i <= 0 ? "/" : path.slice(0, i);
 }
+
+export function extname(path: string): string {
+  const name = basename(path);
+  const i = name.lastIndexOf(".");
+  return i <= 0 ? "" : name.slice(i);
+}
+
+/** Collapse `.` and `..` segments of an absolute POSIX path. */
+export function normalize(path: string): string {
+  const out: string[] = [];
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") out.pop();
+    else out.push(segment);
+  }
+  return "/" + out.join("/");
+}
+
+/**
+ * Expand the `slipway.exportPath` template for a deck into an absolute POSIX
+ * path. Supports the usual VS Code variables that make sense here:
+ * `${fileDirname}`, `${fileBasename}`, `${fileBasenameNoExtension}`,
+ * `${fileExtname}` and `${workspaceFolder}`. A relative result is taken
+ * relative to the deck's folder.
+ */
+export function expandExportPath(template: string, deckPath: string, workspaceFolderPath: string | null): string {
+  const base = basename(deckPath);
+  const ext = extname(deckPath);
+  const vars: Record<string, string> = {
+    fileDirname: dirname(deckPath),
+    fileBasename: base,
+    fileBasenameNoExtension: ext ? base.slice(0, -ext.length) : base,
+    fileExtname: ext,
+    workspaceFolder: workspaceFolderPath ?? dirname(deckPath),
+  };
+  const expanded = (template.trim() || "${fileDirname}/${fileBasenameNoExtension}.html").replace(
+    /\$\{(\w+)\}/g,
+    (match, name: string) => (name in vars ? vars[name] : match),
+  );
+  return normalize(expanded.startsWith("/") ? expanded : dirname(deckPath) + "/" + expanded);
+}
+
+/** `deck.html` → `deck.print.html` (any other name just gains `.print.html`). */
+export function printVariantPath(htmlPath: string): string {
+  return /\.html?$/i.test(htmlPath) ? htmlPath.replace(/(\.html?)$/i, ".print$1") : htmlPath + ".print.html";
+}
