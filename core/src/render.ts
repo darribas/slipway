@@ -3,6 +3,7 @@ import { preprocessDeck } from "./preprocess";
 import { extractDeclarations } from "./frontmatter";
 import { injectRevealConfigOverride, injectSandboxCompat, inlineFontUrls, inlineKatexAssets, inlineRevealAssets, inlineThemeCss } from "./inline-assets";
 import { base64Encode, now } from "./host";
+import type { PandocInstanceSync } from "./pandoc-sync.js";
 import type {
   PandocInstance,
   PandocJob,
@@ -164,4 +165,10 @@ export async function renderDeck(
   const job = prepareRender(inputs);
   const out = await pandoc.convert(job.options, job.stdin, job.files);
   return finalizeRender(job, out);
+}
+
+/** renderDeck for a synchronous pandoc instance (see pandoc-sync.js). */
+export function renderDeckSync(pandoc: PandocInstanceSync, inputs: RenderInputs): RenderResult {
+  const job = prepareRender(inputs);
+  return finalizeRender(job, pandoc.convert(job.options, job.stdin, job.files));
 }

@@ -3,11 +3,13 @@
 // imports: only standard JS, TextEncoder/TextDecoder and (for pandoc)
 // WebAssembly.
 
-export { finalizeRender, prepareRender, renderDeck } from "./render";
+export { finalizeRender, prepareRender, renderDeck, renderDeckSync } from "./render";
 export { buildPrintVariant } from "./print";
-export { buildRenderInputs } from "./project";
-export type { ProjectFS } from "./project";
+export { buildRenderInputs, buildRenderInputsSync } from "./project";
+export type { ProjectFS, ProjectFSSync } from "./project";
 export { createPandocInstance } from "./pandoc-core.js";
+export { createPandocInstanceSync } from "./pandoc-sync.js";
+export type { PandocInstanceSync } from "./pandoc-sync.js";
 export { extractDeclarations } from "./frontmatter";
 export type { Declarations } from "./frontmatter";
 export { resolveDeclaredPath, rebaseChildPath } from "./path-resolve";

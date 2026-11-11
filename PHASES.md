@@ -727,7 +727,7 @@ The vitest run currently can't validate the SCSS content of the bundled catalog 
 
 ## Phase 4 — Shared core + two new surfaces (issue #41)
 
-**Status:** 4.0–4.2 and 4.4–4.6 shipped on the branch; 4.3 (a-Shell adapter) waits on the device spikes; 4.7 (iPad acceptance) waits on the merge and on Dani
+**Status:** 4.0–4.6 shipped on the branch; 4.7 (iPad acceptance) waits on the merge and on Dani
 **Spec:** issue #41 — extract the renderer into a shared `core/` package and ship it through two more surfaces besides the PWA: a VS Code web extension and a `slipway` CLI. All three must render the same deck to the same HTML.
 
 ### Increment 4.0a: Golden outputs + generated assets module
@@ -840,7 +840,47 @@ Each prints PASS/FAIL lines with timings and saves `report-*.txt`. Step-by-step 
 
 **Open questions only the device can answer:** WebAssembly present and synchronous compile of a 58 MB module allowed; memory headroom for a 78 MB base64 string + the module + pandoc's heap inside the web view; compile and render times; whether large `prompt()` payloads survive in both directions; whether the cached instance persists between `jsc` runs.
 
-**Outcome so far:** S2 and S3 pass in emulation; device run pending. Per the issue's decision rule, nothing further is built on the a-Shell route (4.3) until Dani has run the kit and the results are recorded here.
+**Outcome so far:** S2 and S3 pass in emulation; device run pending. Per the issue's decision rule, nothing further is built on the a-Shell route (4.3) until Dani has run the kit and the results are recorded here. *(Update: run on 2026-11-11 — see "4.2 device results" below.)*
+
+### Increment 4.2 — device results (Dani, a-Shell on iPad, 2026-11-11)
+
+Posted on issue #41. Every probe passed.
+
+- **S3 (environment):** `WebAssembly` is there; synchronous `Module` + `Instance` works; memory grows to 512 MiB. The page is `https://localhost:8443/wasm.html` with a Safari user agent, confirming the web-view reading of a-Shell's source. `TextEncoder`, `btoa`/`atob`, `performance`, `fetch`, `Blob`, `Worker` all exist. `jsc` text and binary round-trips, relative paths, `listFiles`/`isFile`/`getFileSize` behave; a missing file's `readFile` returns the error *text* (so callers must check `isFile` first). `jsc.system` returns the exit code as a string (`"0"`, `"2"` for `false`) and blocks. **A 2 MB `writeFile` goes through in one message** — the chunked fallback the emulator needed is not needed on WebKit. Promise and timer callbacks do run after a script returns. (`jsc` shows as "undefined" in the globals list only because it is a lexical `const` in the page, not a property of `globalThis`.)
+- **S2 (JS stages):** Dart Sass compiles (19 ms cold, 3 ms warm); the pandoc job matches the build machine's; `finalizeRender` on the canned output is **identical to the golden**; core's promise-based `buildRenderInputs` resolved.
+- **S3b (full render):** **identical to the golden**, with the instance cached on the web view reused: `pandoc.convert` 94 ms, whole render **281 ms**.
+
+**Gaps in what came back:** `report-s3b.txt` is overwritten by each run, and the kit asked for two, so only the second (cached) run was captured. The first run evidently worked — the cached instance exists and nothing crashed — but how long reading, decoding and compiling the 58 MB module takes on the device, and how close it comes to the memory ceiling, was not recorded. Device model, iPadOS and a-Shell versions weren't posted either. Also not exercised on the device: a theme that triggers Sass deprecation notices (the fixture used `theme.scss`, which has none).
+
+**Decision, per the issue's rule:** S3b identical → build 4.3 as a single `jsc` script. S1 (a pandoc command build) is dropped.
+
+### Increment 4.3: a-Shell adapter
+
+`slipway render` now runs fully offline in a-Shell on iPad, as one script for `jsc`: `cli/dist/slipway-ashell.js` (4.2 MB) with `pandoc.wasm` beside it.
+
+**Core gained a synchronous path** (additive; goldens unchanged):
+
+- `createPandocInstanceSync(wasm)` (`core/src/pandoc-sync.js`) — the spike's driver promoted: `new WebAssembly.Module` + `Instance`, and a `convert()` that takes strings / `Uint8Array`s and returns directly. Same WASI setup and convert protocol as the vendored async glue.
+- `buildRenderInputsSync(qmdPath, fs: ProjectFSSync)` and `renderDeckSync(pandoc, inputs)`. To avoid two copies of the resolution rules, `project.ts` was split into a pure `planRenderInputs` (which files does this deck need?) plus an assemble step; the async and sync functions differ only in how they read.
+- A new golden test renders three fixture decks through the fully synchronous path and requires the same hashes as the async one.
+
+**The adapter** (`cli/src/ashell/`): a `ProjectFSSync` over `jsc.listFiles` / `readFile` / `readFileBase64` with the same ignore rule and sort as every other surface; the same project-root rule as the desktop CLI; usage text and argument parsing shared with it (`src/args.ts`, split out of `cli.ts`). Shaped by what the spikes showed:
+
+- **Pandoc stays loaded.** The instance is kept on `globalThis` (keyed by CLI version, wasm path and size), so only the first render in an a-Shell window reads and compiles the module; `jsc --reset` drops it.
+- **IIFE bundle**, since every `jsc` run shares the page's global scope.
+- **Base64 decoding is hand-rolled** rather than `atob`, to avoid a second 58 MB string while loading the wasm; the loaded bytes are checked against the file size and the wasm magic.
+- **Writes are verified** by comparing the file's size with the HTML's byte length (one `writeFile` suffices on the device; the check is there in case that ever stops being true).
+- **No exit status.** A `jsc` script cannot set one, so the issue's exit codes don't apply on this surface: errors and warnings are printed, a failed render writes nothing and prints no `Output created:` line. Documented in the README and SPEC.
+
+**Deviation from the issue's 3b design:** no external `pandoc` command, no temp job folder, no defaults file, no `jsc.system` — the 4.2 findings made them unnecessary.
+
+**Tests** (`cli/test/ashell.test.ts`, 8): the *built* script evaluated the way a-Shell evaluates it — in a persistent `node:vm` global scope offering `jsc`, `prompt` and `process.argv`, with a-Shell's return conventions (`listFiles` ending in an empty entry, the argv preamble). Demo deck, Imago showcase (fonts through `readFileBase64`, `--root ..`), the PNG fixture, `-o` and `--print` all match core's goldens; a second run in the same window does not re-read the wasm; `_quarto.yml` root; ignored folders; warnings / `--verbose`; Sass and pandoc errors write nothing; usage errors; a clear message when `pandoc.wasm` is missing. This is a Node stand-in, not WebKit: what it adds over the device spike is coverage of the adapter's own logic, and what the device spike adds is that the host really behaves this way. **The shipped adapter itself has not yet run on the iPad** — that is on the 4.7 list.
+
+**Distribution:** `assemble-site.sh` publishes `slipway-ashell.js` and `pandoc.wasm` under `/slipway/cli/` (the site grows to ~215 MB, three raw copies of the wasm); `cli/index.html` and `cli/README.md` carry the install steps. Neither file is in the npm tarball.
+
+**Cleanup:** the spike kit (`cli/spikes/ashell/`, including its committed 2.3 MB tarball) is removed now that the route is decided; it remains in history at `c7d80b1`.
+
+Core 97 tests, CLI 26, app 10, vscode 42.
 
 ### Increment 4.4: VS Code web extension — scaffold, pandoc at activation, preview, render-on-save
 
@@ -914,7 +954,7 @@ The script refuses to run if a package isn't built or if `app/dist` ever grows a
 Not run yet; it needs things an agent can't do and that don't exist until this branch is merged.
 
 - **Extension in Blink Code** — needs the extension live at `https://darribas.github.io/slipway/vscode/`, i.e. after the first deploy from `main`. The checklist is posted on issue #41: install from the URL and survive a Blink relaunch; preview the Imago showcase with theme, fonts, math and images; cursor sync; exported HTML opens from Files in Safari with Wi-Fi off; the 10-minute airplane test; plus the activation time on the iPad and the `curl -I` CORS check.
-- **a-Shell** — the 4.2 spike kit, also posted on the issue. Its results decide whether 4.3 (the a-Shell adapter) is built.
+- **a-Shell** — the 4.2 spike kit was run and passed (see "4.2 — device results"); what remains is running the shipped adapter (4.3) itself: install from `/slipway/cli/`, render a deck that uses the Imago theme (Sass deprecation path, fonts), note the time of the first render in a fresh window, and repeat with Wi-Fi off.
 - **PWA on iPad** — unchanged output is proven by the goldens and by the headless-browser check of the built PWA (4.0d), but "still works offline on iPad as before" is a device check; it is on the same checklist.
 
 Results to be recorded here when they come back.
@@ -972,6 +1012,6 @@ Relative URLs in the built HTML resolve correctly under any subpath, so the buil
 
 ### Capacity headroom
 
-Deployed footprint since Phase 4: **~153 MB** — the PWA (~62 MB: 58 MB `pandoc.wasm` + 4 MB JS), the extension (~60 MB: its own copy of `pandoc.wasm` + 4.2 MB JS) and the CLI tarball (17.6 MB, the wasm compressed inside it). Pages limits: 100 MB/file, 1 GB/site — well under both. (If the a-Shell adapter ships it adds a raw `pandoc.wasm` under `cli/`, ~58 MB more.)
+Deployed footprint since Phase 4: **~153 MB** — the PWA (~62 MB: 58 MB `pandoc.wasm` + 4 MB JS), the extension (~60 MB: its own copy of `pandoc.wasm` + 4.2 MB JS) and the CLI tarball (17.6 MB, the wasm compressed inside it). Pages limits: 100 MB/file, 1 GB/site — well under both. The a-Shell adapter (4.3) adds a third raw `pandoc.wasm` plus its 4.2 MB script under `cli/`, for **~215 MB** in all.
 
 Soft bandwidth cap is 100 GB/month. The PWA costs bandwidth once per visitor (hashed assets, then the service worker). **The extension is the new cost**: VS Code for the Web re-fetches an extension installed from a URL on every launch, and `pandoc.wasm` is 58 MB raw. If Pages serves it gzip-compressed (as it does `application/wasm` for the PWA; ~16 MB on the wire) that is roughly 6,000 launches a month; uncompressed, about 1,700. Whether the browser's HTTP cache turns repeat launches into cheap revalidations inside VS Code for the Web / Blink Code is not known yet — to be observed in the 4.7 iPad run (Blink relaunch timing with and without a warm cache). For one author this is a non-issue either way; it only matters if the extension gets many users.

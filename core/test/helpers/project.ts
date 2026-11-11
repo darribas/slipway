@@ -2,11 +2,12 @@
 // RenderInputs through core's real buildRenderInputs(). Paths are POSIX,
 // relative to `root`, sorted like the PWA's storage.listFiles().
 
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { buildRenderInputs } from "../../src/index";
-import type { ProjectFS, RenderInputs } from "../../src/index";
+import type { ProjectFS, ProjectFSSync, RenderInputs } from "../../src/index";
 
 async function walk(root: string, rel = ""): Promise<string[]> {
   const out: string[] = [];
@@ -56,4 +57,21 @@ export function loadProjectInputs(
   overlay: Record<string, string> = {},
 ): Promise<RenderInputs> {
   return buildRenderInputs(qmdPath, dirProjectFS(root, overlay));
+}
+
+/** The synchronous twin of dirProjectFS. */
+export function dirProjectFSSync(root: string): ProjectFSSync {
+  const walkSync = (rel: string, out: string[]): string[] => {
+    for (const name of readdirSync(join(root, rel))) {
+      const p = rel ? `${rel}/${name}` : name;
+      if (statSync(join(root, p)).isDirectory()) walkSync(p, out);
+      else out.push(p);
+    }
+    return out;
+  };
+  return {
+    listFiles: () => walkSync("", []).sort(),
+    readText: (p) => readFileSync(join(root, p), "utf8"),
+    readBytes: (p) => new Uint8Array(readFileSync(join(root, p))),
+  };
 }

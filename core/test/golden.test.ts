@@ -21,9 +21,9 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, test } from "vitest";
 
-import { buildPrintVariant, renderDeck } from "../src/index";
-import { loadPandoc } from "./helpers/pandoc";
-import { loadProjectInputs } from "./helpers/project";
+import { buildPrintVariant, buildRenderInputsSync, createPandocInstanceSync, renderDeck, renderDeckSync } from "../src/index";
+import { loadPandoc, pandocWasmPath } from "./helpers/pandoc";
+import { dirProjectFSSync, loadProjectInputs } from "./helpers/project";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
@@ -90,6 +90,23 @@ describe("golden outputs", () => {
       if (deck.name === "demo-slide") check("demo-slide.print", buildPrintVariant(html));
     }, 60_000);
   }
+
+  test("the synchronous path (buildRenderInputsSync + renderDeckSync) gives the same bytes", async () => {
+    // What the a-Shell adapter uses. Checked against the same goldens as
+    // the async path, for the deck with includes + bibliography and the one
+    // with fonts and an image.
+    const pandocSync = createPandocInstanceSync(readFileSync(pandocWasmPath()));
+    for (const [name, root, deck] of [
+      ["demo-slide", DEMO, "demos/slide.qmd"],
+      ["demo-imago-showcase", DEMO, "demos/imago-showcase.qmd"],
+      ["imago-workshop", IMAGO, "slide.qmd"],
+    ] as const) {
+      const result = renderDeckSync(pandocSync, buildRenderInputsSync(deck, dirProjectFSSync(root)));
+      expect(result.ok).toBe(true);
+      const buf = Buffer.from(result.html, "utf8");
+      expect({ sha256: createHash("sha256").update(buf).digest("hex"), bytes: buf.length }, name).toEqual(recorded[name]);
+    }
+  }, 120_000);
 
   afterAll(() => {
     if (UPDATE) writeFileSync(GOLDENS, JSON.stringify(seen, null, 2) + "\n");

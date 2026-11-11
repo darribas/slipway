@@ -36,9 +36,25 @@ await build({
 });
 chmodSync(OUT, 0o755);
 
+// The a-Shell adapter: one self-contained script for `jsc` (a WKWebView).
+// IIFE, because every jsc run shares the page's global scope. Not part of
+// the npm tarball; published next to pandoc.wasm on the Pages site.
+const ASHELL = resolve(ROOT, "dist/slipway-ashell.js");
+await build({
+  entryPoints: [resolve(ROOT, "src/ashell/main.ts")],
+  outfile: ASHELL,
+  bundle: true,
+  platform: "browser",
+  format: "iife",
+  target: "safari15",
+  minify: true,
+  legalComments: "none",
+  logLevel: "warning",
+});
+
 // pandoc-wasm's `exports` only exposes its entry point; the wasm sits next to it.
 const wasmSrc = resolve(dirname(require.resolve("pandoc-wasm")), "pandoc.wasm");
 copyFileSync(wasmSrc, resolve(ROOT, "dist/pandoc.wasm"));
 
 const mb = (p) => (statSync(p).size / 1024 / 1024).toFixed(1);
-console.log(`build: dist/slipway.mjs (${mb(OUT)} MB) + dist/pandoc.wasm (${mb(resolve(ROOT, "dist/pandoc.wasm"))} MB)`);
+console.log(`build: dist/slipway.mjs (${mb(OUT)} MB) + dist/slipway-ashell.js (${mb(ASHELL)} MB) + dist/pandoc.wasm (${mb(resolve(ROOT, "dist/pandoc.wasm"))} MB)`);

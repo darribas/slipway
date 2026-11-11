@@ -1,13 +1,18 @@
-// SPIKE CODE (Phase 4.2) — a synchronous variant of core's pandoc-core.js.
+// A synchronous counterpart of pandoc-core.js's createPandocInstance, for
+// hosts where a render has to finish within one synchronous script
+// evaluation (a-Shell's `jsc`, which runs scripts in a WKWebView and reports
+// back when that evaluation returns).
 //
-// a-Shell's `jsc` evaluates a script with WKWebView.evaluateJavaScript and
-// reports back when that one synchronous evaluation finishes, so nothing in
-// the render may be async: WebAssembly.instantiate() (a promise) is replaced
-// by `new WebAssembly.Module` + `new WebAssembly.Instance`, exactly as
-// a-Shell's own `wasm` command does in the same web view, and convert() takes
-// only strings / Uint8Arrays (no Blob, so no `await blob.arrayBuffer()`).
+// Differences from the vendored async version: `new WebAssembly.Module` +
+// `new WebAssembly.Instance` instead of WebAssembly.instantiate(), and
+// convert() takes only strings / Uint8Arrays (no Blob) and returns its
+// result directly. The WASI setup, the Haskell runtime initialisation and
+// the convert() protocol (options JSON in memory; /stdin, /stdout, /stderr,
+// /warnings in a virtual file system) are the same — the goldens check that
+// both produce identical output.
 //
-// If the spike passes, this becomes `createPandocInstanceSync` in core (4.3).
+// Browsers other than WebKit refuse synchronous compilation of large modules
+// on the main thread; use createPandocInstance there.
 
 import { ConsoleStdout, File, OpenFile, PreopenDirectory, WASI } from "@bjorn3/browser_wasi_shim";
 

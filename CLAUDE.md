@@ -76,9 +76,13 @@ cli/                                   the `slipway` command (Node)
   src/cli.ts                           args, exit codes, render flow
   src/node-fs.ts, src/root.ts          node:fs ProjectFS, project-root rules
   src/bin.ts                           executable entry
+  src/args.ts                          usage text + arg parsing (shared)
+  src/ashell/                          the a-Shell adapter: one IIFE script
+                                       for `jsc` → dist/slipway-ashell.js
   scripts/build.mjs                    esbuild → dist/slipway.mjs, copies
                                        pandoc.wasm next to it
   test/cli.test.ts                     in-process + built-artifact tests
+  test/ashell.test.ts                  the a-Shell bundle in a node:vm page
 vscode/                                the VS Code web extension
   package.json                         the extension manifest (publisher
                                        darribas; browser + main → dist/)
