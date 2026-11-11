@@ -13,3 +13,6 @@ node_modules/
 .vite
 .idea/
 .vscode/
+
+# Assembled Pages site (.github/scripts/assemble-site.sh)
+/_site/

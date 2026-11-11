@@ -124,6 +124,10 @@ export default defineConfig({
         // Cache-first for everything in the precache list (app shell + wasm).
         // Runtime requests (none expected in normal operation) fall through.
         navigateFallback: "index.html",
+        // The same Pages site also serves the VS Code extension (/vscode/)
+        // and the CLI download (/cli/). They are not part of the app: never
+        // answer a navigation there with the app shell.
+        navigateFallbackDenylist: [/\/vscode\//, /\/cli\//],
       },
     }),
   ],

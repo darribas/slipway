@@ -727,7 +727,7 @@ The vitest run currently can't validate the SCSS content of the bundled catalog 
 
 ## Phase 4 — Shared core + two new surfaces (issue #41)
 
-**Status:** in progress
+**Status:** 4.0–4.2 and 4.4–4.6 shipped on the branch; 4.3 (a-Shell adapter) waits on the device spikes; 4.7 (iPad acceptance) waits on the merge and on Dani
 **Spec:** issue #41 — extract the renderer into a shared `core/` package and ship it through two more surfaces besides the PWA: a VS Code web extension and a `slipway` CLI. All three must render the same deck to the same HTML.
 
 ### Increment 4.0a: Golden outputs + generated assets module
@@ -885,6 +885,40 @@ Second CI run in real VS Code for the Web: activation 675 ms (pandoc 496 ms); `p
 
 New rule (`affectsDeck` in `src/paths.ts`): the deck itself, and themes / bibliographies / images / fonts anywhere in the project, always trigger a re-render (those are resolved forgivingly project-wide, so any may matter); another markdown file only does if the deck's source includes it with `{{< include >}}` (matched by path or basename, like the renderer does); ignored folders and exported `.html` never do. Unit-tested, plus a bundle test with two previews open: saving one deck renders only it, and saving `_snippet.qmd` renders only the deck that includes it. The test-web assertion now checks which deck rendered, not just how many. vscode: 42 tests.
 
+### Increment 4.6: Pages layout, release jobs, READMEs
+
+**One Pages site, three surfaces.** `deploy.yml` now builds and tests `core`, `app`, `cli` and `vscode`, then `.github/scripts/assemble-site.sh` assembles:
+
+```
+_site/
+  …            app/dist — the PWA at the root; its URLs are unchanged
+  vscode/      package.json, dist/extension.js, dist/pandoc.wasm, README.md, LICENSE, icon.png
+  cli/         slipway-cli-<version>.tgz, index.html (install command + link)
+```
+
+The script refuses to run if a package isn't built or if `app/dist` ever grows a `vscode/` or `cli/` folder of its own, and checks the tarball name against `cli/package.json`. Assembled locally: 153 MB. The PWA's service worker got `navigateFallbackDenylist` for `/vscode/` and `/cli/` so a browser with the PWA installed doesn't answer a visit to those paths with the app shell (verified in the built `sw.js`). `/slipway/vscode/` and `/slipway/cli/` are permanent addresses; a test channel would go under `/vscode/next/`.
+
+**Releases.** New `release.yml`: pushing a tag `vscode-v<version>` builds, tests and packages `slipway-<version>.vsix` (`vsce package --no-dependencies` — everything is bundled; the only dependencies are dev ones, including the `file:` link to core); `cli-v<version>` does the same for `slipway-cli-<version>.tgz`. The tag must match that package's `package.json` version or the job fails. Each package keeps its own version. Packaging was tried locally: the `.vsix` is 16.7 MB with exactly `package.json`, `dist/extension.js`, `dist/pandoc.wasm`, `README.md`, `LICENSE`, `icon.png` (`vscode/.vscodeignore`).
+
+**Docs.** `vscode/README.md` (install from the URL in VS Code for the Web / Blink Code, `.vsix` on desktop, what "offline" means, commands, settings); `cli/README.md` gained update and release notes; `SPEC.md` has a new **Surfaces** section; the Deployment section of this file describes the new pipeline and the bandwidth picture.
+
+**CI, all green on the branch** (run 42998723647, dispatched manually): `core`, `app`, `cli`, `vscode`, and the `@vscode/test-web` suite in real VS Code for the Web — activation 973 ms (pandoc.wasm 715 ms, served from localhost), `previewToSide` output identical to the golden, the Imago showcase resolved through the virtual file system, exactly one render on save, `exportHtml` wrote a self-contained 999 560-byte file, and nothing in the extension host touched the network after activation (17 workspace-file reads went through the harness's own mount, which is exempt).
+
+**Not verified here, and why:**
+
+- The deploy and release workflows only run on `main` / on tags, so they have not executed. The assembly script they call was run locally; `release.yml`'s packaging commands were run locally; the workflow YAML itself is unexercised until the first merge and the first tag.
+- **CORS check (`curl -I` on the extension URL)** — the issue asks for it once. It can only be done after the first deploy to Pages, and this sandbox's network policy blocks `darribas.github.io` anyway. GitHub Pages sends `access-control-allow-origin: *` on every response, which is what VS Code for the Web needs; to confirm after merging: `curl -sI https://darribas.github.io/slipway/vscode/package.json | grep -i access-control`. It is on the 4.7 checklist.
+
+### Increment 4.7: Manual iPad acceptance — pending (Dani)
+
+Not run yet; it needs things an agent can't do and that don't exist until this branch is merged.
+
+- **Extension in Blink Code** — needs the extension live at `https://darribas.github.io/slipway/vscode/`, i.e. after the first deploy from `main`. The checklist is posted on issue #41: install from the URL and survive a Blink relaunch; preview the Imago showcase with theme, fonts, math and images; cursor sync; exported HTML opens from Files in Safari with Wi-Fi off; the 10-minute airplane test; plus the activation time on the iPad and the `curl -I` CORS check.
+- **a-Shell** — the 4.2 spike kit, also posted on the issue. Its results decide whether 4.3 (the a-Shell adapter) is built.
+- **PWA on iPad** — unchanged output is proven by the goldens and by the headless-browser check of the built PWA (4.0d), but "still works offline on iPad as before" is a device check; it is on the same checklist.
+
+Results to be recorded here when they come back.
+
 -----
 
 ## Repo cleanup (deferred)
@@ -910,13 +944,15 @@ Small tidy-ups to land at the next natural stopping point — none are blocking,
 
 ### How it works
 
-Every push to `main` (and the manual **Run workflow** button) triggers:
+Every push to `main` (and the manual **Run workflow** button) triggers `deploy.yml`:
 
-1. `cd app && npm ci && npm run build`
-2. Upload `app/dist/` as the Pages artifact
-3. `actions/deploy-pages@v4` publishes it
+1. `npm ci` + `npm test` in `core/`
+2. `npm ci`, `npm test`, `npm run build` in `app/`
+3. `npm ci` + `npm test` in `cli/` and in `vscode/` (their `pretest` builds `dist/`, so what is published is what was just tested)
+4. `.github/scripts/assemble-site.sh _site` lays out one site — the PWA at the root, the unpacked extension under `vscode/`, the CLI tarball under `cli/` (see Increment 4.6)
+5. Upload `_site/` as the Pages artifact; `actions/deploy-pages@v4` publishes it
 
-Total run time ≈ 1–2 minutes. The deploy job's own `npm run build` step runs `tsc --noEmit` first, so a typecheck regression fails CI before publishing.
+`release.yml` separately attaches `slipway-<v>.vsix` / `slipway-cli-<v>.tgz` to a GitHub Release when a `vscode-v*` / `cli-v*` tag is pushed.
 
 ### One-time GitHub UI step
 
@@ -936,4 +972,6 @@ Relative URLs in the built HTML resolve correctly under any subpath, so the buil
 
 ### Capacity headroom
 
-Total deployed footprint ~62 MB (58 MB `pandoc.wasm` + 4 MB JS). Pages limits: 100 MB/file, 1 GB/site (we're well under both). Soft bandwidth cap is 100 GB/month — about 1,600 first-time visits before throttling. Hashed asset filenames mean repeat visits hit the browser cache and cost zero bandwidth.
+Deployed footprint since Phase 4: **~153 MB** — the PWA (~62 MB: 58 MB `pandoc.wasm` + 4 MB JS), the extension (~60 MB: its own copy of `pandoc.wasm` + 4.2 MB JS) and the CLI tarball (17.6 MB, the wasm compressed inside it). Pages limits: 100 MB/file, 1 GB/site — well under both. (If the a-Shell adapter ships it adds a raw `pandoc.wasm` under `cli/`, ~58 MB more.)
+
+Soft bandwidth cap is 100 GB/month. The PWA costs bandwidth once per visitor (hashed assets, then the service worker). **The extension is the new cost**: VS Code for the Web re-fetches an extension installed from a URL on every launch, and `pandoc.wasm` is 58 MB raw. If Pages serves it gzip-compressed (as it does `application/wasm` for the PWA; ~16 MB on the wire) that is roughly 6,000 launches a month; uncompressed, about 1,700. Whether the browser's HTTP cache turns repeat launches into cheap revalidations inside VS Code for the Web / Blink Code is not known yet — to be observed in the 4.7 iPad run (Blink relaunch timing with and without a warm cache). For one author this is a non-issue either way; it only matters if the extension gets many users.

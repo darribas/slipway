@@ -19,8 +19,11 @@ Since Phase 4 (issue #41) the renderer is a shared package, `core/`
 must render the same deck to the same HTML; `core/test/goldens/` guards that.
 
 The deployed app lives at <https://darribas.org/slipway/> (and
-<https://darribas.github.io/slipway/>), served via GitHub Pages from
-`app/dist/`, built by `.github/workflows/deploy.yml` on every push to `main`.
+<https://darribas.github.io/slipway/>), served via GitHub Pages and built by
+`.github/workflows/deploy.yml` on every push to `main`. The same site
+carries the extension, unpacked, at `/slipway/vscode/` and the CLI tarball at
+`/slipway/cli/` — **permanent addresses, never move them** (VS Code for the
+Web re-fetches the extension from its install URL on every launch).
 
 ## The two canonical docs
 
@@ -89,7 +92,10 @@ vscode/                                the VS Code web extension
   test-web/                            separate package: the bundle inside
                                        real VS Code for the Web (CI only —
                                        needs to download VS Code)
-.github/workflows/                     deploy.yml + ci.yml
+.github/workflows/                     ci.yml (PR gate, also dispatchable on
+                                       a branch), deploy.yml (Pages),
+                                       release.yml (vscode-v* / cli-v* tags)
+.github/scripts/assemble-site.sh       lays out the Pages site
 ```
 
 There is **no root npm workspace**. Each package has its own `package.json`

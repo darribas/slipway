@@ -19,7 +19,11 @@ npm install -g https://darribas.github.io/slipway/cli/slipway-cli-0.1.0.tgz
 
 The tarball is about 16 MB (it carries `pandoc.wasm`, 56 MB unpacked) and has
 no dependencies, so nothing else is downloaded. To update, run the same
-command with the new version number; to remove, `npm uninstall -g slipway-cli`.
+command with the new version number (the current one is shown at
+<https://darribas.github.io/slipway/cli/>); to remove,
+`npm uninstall -g slipway-cli`. Every version's tarball is also attached to
+the project's [GitHub Releases](https://github.com/darribas/slipway/releases)
+(tags `cli-v*`).
 
 ## Use
 

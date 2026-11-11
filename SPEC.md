@@ -144,6 +144,29 @@ Dedicated "Export PDF" button. Re-renders the deck with reveal.js's `?print-pdf`
 
 -----
 
+## Surfaces
+
+*(Added in Phase 4, issue #41.)* The renderer is one shared package, `core/` (`@slipway/core`): no DOM, no Node built-ins, no `fetch`, no bundler-specific imports. Three surfaces sit on top of it, and **all of them must render the same deck to the same HTML, byte for byte** — one set of golden hashes (`core/test/goldens/`) is checked by every surface's tests.
+
+| Surface | Where it runs | Project files come from | How it is delivered |
+| --- | --- | --- | --- |
+| **PWA** (`app/`) | Safari on iPad / iPhone, any desktop browser | IndexedDB | `https://darribas.github.io/slipway/` |
+| **VS Code web extension** (`vscode/`) | VS Code for the Web (Blink Code on iPad, vscode.dev) and desktop VS Code | the workspace, through `vscode.workspace.fs` | unpacked at `https://darribas.github.io/slipway/vscode/` (Developer: Install Extension From Location…); `.vsix` on GitHub Releases |
+| **`slipway` CLI** (`cli/`) | Node.js 20+ on desktop | the folder on disk | npm tarball at `https://darribas.github.io/slipway/cli/`; also on GitHub Releases |
+
+Each surface supplies only two things: a `ProjectFS` (list files, read text, read bytes) and a way to load `pandoc.wasm`. Everything else — resolving the theme and bibliography, Sass, preprocessing, the pandoc invocation, inlining reveal.js / KaTeX / fonts — is core.
+
+Rules that hold across surfaces:
+
+- **Same scope everywhere.** No code execution, no Lua filters, no cross-references on any surface. A feature is added to core or not at all.
+- **Render stays explicit.** The PWA renders on `Cmd+R`; the CLI when invoked; the extension on save by default (`slipway.renderOn`), never silently on idle unless the user opts into `"type"`.
+- **Offline.** The PWA works offline once installed. The CLI is fully offline. The extension works offline *once activated* — VS Code for the Web itself loads from the network on each launch, so the extension loads everything it needs, including `pandoc.wasm`, at activation and nothing lazily afterwards.
+- **PDF** remains the PWA's Safari print flow; the CLI (`--print`) and the extension (Export Print HTML) can write the print-variant HTML to open in a browser.
+- **Permanent addresses.** `/slipway/vscode/` and `/slipway/cli/` never move: VS Code for the Web re-fetches the extension from its install URL on every launch.
+- **No registries.** No Marketplace / Open VSX listing and no npm registry package.
+
+A fourth surface, the CLI inside **a-Shell** on iPad, is being investigated (see PHASES.md, Increment 4.2); it is not part of the spec until its spikes have been run on a device.
+
 ## Out of scope (deferred)
 
 - Multi-project switcher UI
