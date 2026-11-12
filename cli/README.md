@@ -62,40 +62,12 @@ ignored.
 
 ## a-Shell (iPad / iPhone)
 
-The same command runs fully offline inside
-[a-Shell](https://holzschu.github.io/a-Shell_iOS/), through its `jsc`
-JavaScript runner. Install once (online; the second file is 56 MB):
-
-```sh
-mkdir -p ~/Documents/bin && cd ~/Documents/bin
-curl -L -O https://darribas.github.io/slipway/cli/slipway-ashell.js
-curl -L -O https://darribas.github.io/slipway/cli/pandoc.wasm
-```
-
-Then, anywhere:
-
-```sh
-jsc ~/Documents/bin/slipway-ashell.js render deck.qmd
-```
-
-The options are the same as on the desktop (`-o`, `--root`, `--print`,
-`--verbose`) and so is the HTML. To update, download both files again.
-
-Things that differ from the desktop command:
-
-- **The first render in a window is slow, the rest are fast.** The first one
-  reads and compiles `pandoc.wasm`; it then stays loaded in that a-Shell
-  window (later renders took about 0.3 s on an iPad). `jsc --reset` unloads
-  it and frees the memory.
-- **The exit status is always 0.** A `jsc` script cannot set one. Errors and
-  warnings are printed; on an error no file is written and there is no
-  `Output created:` line.
-- `pandoc.wasm` must sit next to `slipway-ashell.js` (or set
-  `SLIPWAY_PANDOC_WASM` to its path).
-- Use the full a-Shell app; the script needs to run in the app's window, not
-  from a Shortcut or in the background.
-
-To remove it: `rm ~/Documents/bin/slipway-ashell.js ~/Documents/bin/pandoc.wasm`.
+The same command also runs fully offline inside
+[a-Shell](https://holzschu.github.io/a-Shell_iOS/), as
+`jsc ~/Documents/bin/slipway-ashell.js render deck.qmd`, with the same
+options and the same HTML. Install, update and uninstall steps are in
+[`README-ashell.md`](README-ashell.md), which is also published next to the
+files at <https://darribas.github.io/slipway/cli/README.md>.
 
 ## Develop
 

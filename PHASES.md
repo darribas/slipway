@@ -878,6 +878,8 @@ Posted on issue #41. Every probe passed.
 
 **Distribution:** `assemble-site.sh` publishes `slipway-ashell.js` and `pandoc.wasm` under `/slipway/cli/` (the site grows to ~215 MB, three raw copies of the wasm); `cli/index.html` and `cli/README.md` carry the install steps. Neither file is in the npm tarball.
 
+**Install guide:** `cli/README-ashell.md` (install, an optional `slipway` alias in `~/Documents/.profile`, use, update, uninstall) is published as `/slipway/cli/README.md` beside the files, and the install step saves a copy to `~/Documents/bin/slipway-README.md` so it can be read offline. The alias is untested on the device; the guide falls back to the full `jsc …` form if a-Shell doesn't recognise `alias`.
+
 **Cleanup:** the spike kit (`cli/spikes/ashell/`, including its committed 2.3 MB tarball) is removed now that the route is decided; it remains in history at `c7d80b1`.
 
 Core 97 tests, CLI 26, app 10, vscode 42.
