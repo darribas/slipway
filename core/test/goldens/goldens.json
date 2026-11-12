@@ -1,0 +1,22 @@
+{
+  "demo-slide": {
+    "sha256": "f67fc4d2855d8c912f91d135ef86bd9f783f941d8643e8957439dcd56fb86bdb",
+    "bytes": 919031
+  },
+  "demo-slide.print": {
+    "sha256": "3b4d75698695f4c9e71e6174cda394d032ff6c55050fd651d7afc22711bec453",
+    "bytes": 923809
+  },
+  "demo-imago-showcase": {
+    "sha256": "348f65c5fd511e6b792c0706f9db85d35393983e915a32e2f0f14f1e9cd4f7b6",
+    "bytes": 999560
+  },
+  "imago-workshop": {
+    "sha256": "92e6831ae04e8d632cb4990b951dd3cfffb286656e4681e3be708145e0d710e1",
+    "bytes": 513395
+  },
+  "journal-probe": {
+    "sha256": "1a8127b52f6180a7d156074faa5a5d9e42749726755be7201ce20501e8e53f45",
+    "bytes": 1141811
+  }
+}

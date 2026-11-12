@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // The extension host is a Web Worker in VS Code for the Web and Node on
+    // desktop: no DOM, and no Node built-ins either. "WebWorker" supplies the
+    // few shared globals (fetch, TextDecoder, setTimeout, console).
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["vscode"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}

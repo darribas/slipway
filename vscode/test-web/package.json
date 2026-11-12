@@ -1,0 +1,14 @@
+{
+  "name": "slipway-vscode-test-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runs the Slipway extension inside real VS Code for the Web (headless Chromium) via @vscode/test-web. Kept apart from vscode/package.json because the runner downloads a browser and a VS Code build.",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.85.0",
+    "@vscode/test-web": "^0.0.81",
+    "esbuild": "^0.25.0"
+  }
+}

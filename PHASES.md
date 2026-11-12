@@ -725,12 +725,251 @@ The vitest run currently can't validate the SCSS content of the bundled catalog 
 
 -----
 
+## Phase 4 — Shared core + two new surfaces (issue #41)
+
+**Status:** 4.0–4.6 shipped on the branch; 4.7 (iPad acceptance) waits on the merge and on Dani
+**Spec:** issue #41 — extract the renderer into a shared `core/` package and ship it through two more surfaces besides the PWA: a VS Code web extension and a `slipway` CLI. All three must render the same deck to the same HTML.
+
+### Increment 4.0a: Golden outputs + generated assets module
+
+First step of the extraction, still entirely inside `app/`.
+
+**Goldens.** New `test/golden.test.ts` renders four fixture decks — the demo `slide.qmd`, the Imago showcase, the `imago-workshop` fixture, and a synthetic Journal-theme probe (math + `controls: false`) — plus the print variant of the demo, and compares each against `test/goldens/goldens.json`. The rendered HTML is ~0.5–1.1 MB per deck, so the goldens are SHA-256 + byte length rather than the documents; on a mismatch the actual HTML is written to `test/goldens/.actual/` (git-ignored) for diffing. `UPDATE_GOLDENS=1 npm test` re-records. Inputs are assembled by `test/helpers/project.ts`, a directory-backed mirror of `buildRenderInputs()` (it goes away in 4.0c when the real one moves to core behind `ProjectFS`). Renders were confirmed deterministic across runs (`date: today` passes through literally; nothing is time-dependent).
+
+**Generated assets.** `scripts/gen-assets.mjs` writes `src/generated/assets.ts` (git-ignored, ~930 kB): reveal.js reset/reveal/white/black CSS, `reveal.js`, the notes/search/zoom plugins, KaTeX JS + CSS with woff2 fonts as data URIs, and reveal's `print/pdf.scss` compiled with Sass. It reproduces what `katexInlinePlugin`, `revealPrintCssPlugin` and the eight `?raw` imports produced, and replaces them — both plugins are deleted from `vite.config.ts`, and `inline-assets.ts` / `print.ts` import the plain module. Wired as `predev` / `prebuild` / `pretest` / `pretypecheck`, and skips the write when the content is unchanged so watchers don't churn. The renderer now has no bundler-specific imports except `virtual:pandoc-wasm-url` in the PWA's loader (which stays per surface).
+
+**What the goldens caught: the tests had been rendering with empty reveal CSS.** The goldens captured before the change did *not* match after it. Cause: under vitest, Vite's CSS plugin wins over the `?raw` query for `.css` files (the same quirk increment 34.9 noted for `.scss?raw`), so `reset.css`, `reveal.css` and `theme/white.css` were imported as **empty strings** in every test run since the assets were first inlined. Production builds were always correct (verified: the pre-change `dist/` bundle contains the real stylesheets). So "byte-identical before and after" was checked in the only way that is meaningful: the before/after HTML of three decks and their print variants were dumped, the three empty `<style>` blocks in the "before" files were filled with the package's CSS files, and the results are byte-identical to the "after" output — i.e. the generated module changes nothing except making the test environment see what production ships. The committed goldens are the post-change (production-equivalent) hashes, and a new smoke assertion checks the three reveal `<style>` blocks have real content.
+
+62 tests (57 + 4 golden + 1 new), `tsc` clean, build green.
+
+### Increment 4.0b: Renderer moves to `core/` (`@slipway/core`)
+
+The renderer is now its own package, a sibling of `app/`, and the PWA consumes it as a dependency.
+
+**Layout.** `core/src/` holds `render`, `sass`, `preprocess`, `inline-assets`, `frontmatter`, `path-resolve`, `print`, `types`, the vendored `pandoc-core.js`, plus two new files: `index.ts` (the public API) and `host.ts`. `scripts/gen-assets.mjs`, the goldens, the `imago-workshop` fixture and the render assertions moved with it (`core/test/render.test.ts`, `core/test/golden.test.ts`). `app/src/core/` is gone: the PWA's fetch-with-progress pandoc loader is now `app/src/pandoc.ts` and `image-insert.ts` (storage-coupled, PWA-only) moved to `app/src/storage/`. The demo deck stays in `app/src/templates/slipway-demo/` (it is the PWA's seed) and core's tests read it from there.
+
+**No root workspace**, per the spec and the existing root `.gitignore` guard (now anchored to the root so package manifests elsewhere are tracked normally). `app` depends on `"@slipway/core": "file:../core"`; npm symlinks it and Vite bundles core's TypeScript source directly (`exports` → `./src/index.ts`). Consequences: a consumer needs `npm ci` in `core/` first (CI and deploy do this), and Vite's dev server needs `server.fs.allow` to include `../core` (verified: dev server serves `/@fs/…/core/src/*` with 200). `sass`, `yaml`, `katex` and `reveal.js` left `app/package.json` — they are core's now, and everything that affects rendered bytes is pinned to an exact version there (sass 1.99.0, yaml 2.9.0, reveal.js 5.2.1, katex 0.16.47, pandoc-wasm 1.0.1 — the versions the app lockfile already resolved to).
+
+**DOM-free by construction.** `core/tsconfig.json` uses `lib: ["ES2022"]` with `types: []` — no DOM lib, no Node types — so a stray `window`/`document`/`fetch`/`node:` reference fails `npm run typecheck`. To get there: `PandocInstance` takes files as `string | Uint8Array` instead of `Blob` (vendored `pandoc-core.js` gained a three-line `Uint8Array` branch in `addFile`, marked `Slipway:`), and `host.ts` provides `now()` (`performance.now()` → `Date.now()` fallback) and `base64Encode()` (host `btoa` when present, pure-JS encoder otherwise — a-Shell's `jsc` may lack `btoa`). A test checks the pure encoder against Node's for every tail length.
+
+**Tests.** Core: 54 (render assertions + 4 goldens + base64), now driving pandoc through core's own `createPandocInstance` with the wasm read from disk, rather than `pandoc-wasm`'s Node entry — i.e. the exact glue every surface uses. Goldens unchanged from 4.0a. App: 10 (bundled-theme catalog, zip self-heal, file tree) including a new one that renders the seed deck through the app's `@slipway/core` dependency and asserts the SHA-256 equals core's `demo-slide` golden — each surface will carry the same check. Production bundle re-verified (`dist/` still carries the seed SCSS signature strings; JS bundle 5.68 MB, same as before).
+
+**CI/deploy.** `ci.yml` has `core` and `app` jobs (both always run, so a core change always re-tests every consumer); `deploy.yml` installs and tests core before the app. `CLAUDE.md` layout and conventions updated.
+
+**Caught:** `npm install` crashes on a fresh resolve with npm 10.9.9 (`Cannot read properties of null (reading 'edgesOut')`, in arborist's peer-set loading for vitest — reproducible with a bare `vitest` dependency in an empty folder). `npm install --legacy-peer-deps` generates the lockfile; plain `npm ci` from it works. Noted in `CLAUDE.md`.
+
+### Increment 4.0c: `buildRenderInputs` + `ProjectFS` in core
+
+The rules for turning "a deck path in a project" into `RenderInputs` (declared-theme / bibliography resolution with `../` tolerance, first-`.scss`-then-`.css` fallback, basename-keyed image + font assets, include candidates) moved from `app/src/storage/project.ts` to `core/src/project.ts`, behind a three-method interface:
+
+```ts
+interface ProjectFS {
+  listFiles(): Promise<string[]>;   // POSIX paths relative to the project root, sorted
+  readText(path: string): Promise<string>;
+  readBytes(path: string): Promise<Uint8Array>;
+}
+buildRenderInputs(qmdPath: string, fs: ProjectFS): Promise<RenderInputs>
+```
+
+The PWA keeps its one-argument `buildRenderInputs(qmdPath)`, now a three-line wrapper passing an IndexedDB-backed `ProjectFS`. The body moved verbatim; the one thing made explicit in the interface docs is that **list order is part of the contract** (it decides the fallback theme and which of two same-named assets wins), so adapters must return a sorted list like `storage.listFiles()` does.
+
+The test-side mirror of this logic that 4.0a introduced (`test/helpers/project.ts`) is deleted in favour of a directory-backed `ProjectFS` driving the real function — and the goldens are unchanged, which confirms the mirror and the original agreed. Five new unit tests over an in-memory `ProjectFS` cover traversal resolution, the fallback chain, an unresolvable declaration, asset collection, and include keying. Core 59 tests, app 10, build green.
+
+### Increment 4.0d: `prepareRender` / `finalizeRender` split + `slideMap`
+
+**Render split.** `renderDeck` is now literally `prepareRender → pandoc.convert → finalizeRender`:
+
+- `prepareRender(inputs): PandocJob` — Sass compile, font + image data URIs, preprocessing, and the exact pandoc invocation (`options`, `stdin`, `files`), plus a `ctx` with what the second half needs (compiled CSS, the deck's `format.revealjs.*` overrides, pre-pandoc warnings, start time).
+- `finalizeRender(job, { stdout, stderr, warnings }): RenderResult` — warning normalisation and the five post-pandoc passes (sandbox compat, reveal assets, KaTeX, theme CSS, `Reveal.configure()` override).
+
+This is what lets pandoc run out of process (the a-Shell route: `job.options` is a valid pandoc defaults file once serialised) and gives tests a seam. One deviation from the issue's sketch of `PandocJob.ctx`: it also carries `css`, because `finalizeRender` inlines the compiled theme and re-reading it out of `files["theme.css"]` would be a hidden coupling. Tests: the job's options/files are locked down for the demo deck; a theme-less, bib-less deck asks pandoc for neither; doing the three steps by hand yields the same HTML as `renderDeck`; warning shapes are normalised. Goldens unchanged.
+
+**`slideMap(qmd, includes?)`** → `{ h, v, startLine, endLine }[]` (0-based, inclusive lines), with `slideAtLine` / `slideAtIndex` lookups, for editor ↔ preview sync in the extension. It is a line scanner mirroring pandoc's revealjs layout at slide-level 2: `title:` in the frontmatter makes slide h=0; a level-1 heading starts a horizontal slide and the level-2 headings and horizontal rules after it stack vertically beneath it; a level-2 heading or rule with no level-1 above is its own horizontal slide; `###`+ stay inside; code fences (with fence-length matching), fenced divs and HTML comments are skipped; setext headings and the "`#` inside a paragraph isn't a heading" rule are honoured. The optional `includes` map (the one `RenderInputs` carries) expands `{{< include >}}` so slides from an included file all map to the shortcode's line; without it the line is plain content. (The issue's signature was `slideMap(qmd)`; the second, optional parameter is the only way to *count* slides that come from includes, which the indices after the include depend on.)
+
+Rather than hand-writing expectations, `test/slide-map.test.ts` renders each deck with real pandoc, reads the `<section>` nesting out of the HTML and requires the same `(h, v)` sequence: all three fixture decks plus 20 synthetic edge cases (rules in and out of h1 groups, rule-then-heading, content before the first heading, content on an h1 slide, no title, fences, divs, comments, setext, empty headings…) agree. Two things this surfaced, both documented in the source: pandoc appends a trailing `#footnotes` slide that no source line maps to (the map simply ends before it), and pandoc promotes a div whose *first block* is a heading into a slide of its own — unusual markup, not modelled.
+
+**End-to-end acceptance for 4.0 (PWA unchanged).** Beyond the vitest goldens, the production build was served with `vite preview` and driven in headless Chromium: the seeded project's `demos/slide.qmd`, rendered by clicking Render in the real PWA (browser Sass build, browser wasm, IndexedDB `ProjectFS`), produces HTML whose SHA-256 equals core's `demo-slide` golden computed under Node — 919 031 bytes, identical — and reveal.js boots inside the sandboxed preview iframe (29 slides, no page errors). The driver is kept as `app/scripts/check-pwa-golden.cjs` (manual; needs a Playwright install). What this does not cover is the iPad itself — that is the 4.7 manual run.
+
+Core 91 tests, app 10, typechecks and build green.
+
+### Increment 4.1: `slipway` CLI (Node)
+
+New package `cli/` — the smallest consumer of core, built first to prove the API before the extension.
+
+```
+slipway render <deck.qmd> [-o out.html] [--root <dir>] [--print] [--verbose]
+slipway --version | --help
+```
+
+- **Same bytes as the PWA.** The CLI calls `buildRenderInputs` (over a `node:fs` `ProjectFS`) → `prepareRender` → `createPandocInstance(wasm).convert` → `finalizeRender`; `--print` adds `buildPrintVariant`. Its tests render the demo deck, the Imago showcase, the `imago-workshop` fixture and the print variant and compare SHA-256 against **core's `goldens.json`** — the same file the PWA check uses.
+- **Project root:** `--root`, else the nearest ancestor with `_quarto.yml`, else cwd if the deck is under it, else the deck's folder. Hidden folders and `node_modules` are never walked (a test plants a broken `.scss` in `.git/`, `.quarto/` and `node_modules/` and requires the render to succeed).
+- **Output and exit codes:** stdout carries only `Output created: <path>`; warnings go to stderr; `0` rendered, `1` pandoc or Sass error (nothing written), `2` usage error / file not found — all covered by tests.
+- **Packaging:** esbuild bundles everything (core's TS, Dart Sass, yaml, the WASI shim) into `dist/slipway.mjs` (7.4 MB) with `pandoc.wasm` copied beside it; `npm pack` gives `slipway-cli-0.1.0.tgz`, **17.6 MB**, with no dependencies, so `npm install -g <url>` touches no registry. Dart Sass's Node build is CommonJS inside and calls `require()`, so the ESM bundle gets a `createRequire` banner. Tests assert the bundle has only `node:` imports and that the tarball contains exactly `dist/slipway.mjs`, `dist/pandoc.wasm`, `README.md`, `package.json`.
+- **Verified by hand as well:** packed the tarball, `npm install -g --offline` into a scratch prefix, ran the installed `slipway render imago-showcase.qmd --root ..` — output hash equals the golden. A render takes ~2.4 s wall (wasm instantiate + render) on this machine.
+
+**Two small additions to core, both additive (goldens unchanged):**
+
+- `RenderResult.ok` — false when pandoc produced no document (it reports why on stderr, e.g. `Error reading bibliography file`); and `RenderResult.diagnostics`, the pandoc messages with their verbosity kept (`info` vs `warning`). `warnings: string[]` is untouched, so the PWA's status line behaves as before.
+- **Sass messages are captured instead of printed.** Dart Sass's default logger writes straight to stderr/console; the bundled Imago theme alone produced ~80 lines of deprecation notices per CLI render. `compileScss` now takes a logger that records deprecations as `info` and `@warn` as `warning` diagnostics (with the theme line where Sass gives one). The CLI shows warnings always and info notes with `--verbose`. Side effect for the PWA: those notices no longer land in the browser console; its visible warning count is unchanged because Sass messages are only in `diagnostics`.
+
+`ci.yml` gains a `cli` job. Core 96 tests, CLI 18, app 10.
+
+**Deferred to 4.6:** publishing the tarball under `/slipway/cli/` on Pages and attaching it to `cli-v*` releases.
+
+### Increment 4.2: a-Shell spikes — prepared, desk findings in; device run pending
+
+Findings only; no shipped code changed. An agent can't run a-Shell, so this increment (a) settles what can be settled from primary sources and local experiments, and (b) prepares a spike kit for Dani to run on the iPad. **4.3 stays blocked until the device results are back**; 4.4 onwards continues meanwhile.
+
+**Desk finding 1 — a-Shell's `jsc` is a WKWebView, not the JavaScriptCore API.** The issue assumed `jsc` embeds JavaScriptCore (no JIT → no Wasm). a-Shell's source says otherwise: in the main app, `jsc` calls `executeJavascript`, which runs the script with `WKWebView.evaluateJavaScript` in the terminal's own page (`wasm.html`); only the app-extension / background path falls back to a `JSContext` (`ExtraCommands.swift`, `SceneDelegate.swift`). The `jsc.readFile` / `writeFile` / `readFileBase64` / `system` API is a JS object in that page whose methods are synchronous `prompt("jsc\n<op>\n<args>")` calls answered natively. And a-Shell's own `wasm` command runs in the *same page* with `new WebAssembly.Module(bytes)` + `new WebAssembly.Instance(...)`. So WebAssembly should be available to a `jsc` script, compiled synchronously — to be confirmed on the device (spike S3).
+
+Consequences read off the same source: the script is evaluated synchronously and `jsc` returns when that evaluation does (an async path exists but is disabled with `if #available(iOS 15.0, *), false`), so the render must not depend on awaiting real async work; every run shares the page's global scope, so a script must be an IIFE (a second run of top-level `const`s would throw) — and, usefully, a pandoc instance stored on `globalThis` survives between runs until `jsc --reset`.
+
+**Desk finding 2 — the shipped `pandoc.wasm` cannot double as a `pandoc` command.** The issue calls it a reactor with no `_start`. It does export `_start` (exports: `memory, __wasm_call_ctors, _start, convert, query, malloc, hs_init_with_rtsopts`), and upstream's cabal file shows it is `pandoc-cli` built for `wasm32` with `convert`/`query` exported on top. But running `_start` under two WASI runtimes (Node's `node:wasi` and `browser_wasi_shim`) with `--version`, `-t latex` on stdin, a bogus flag, and `input.md -o out.html` gives exit 0 after ~1.5 s with **no output and no files** every time. So `_start` is inert in this build and the conclusion stands by a different route: the "external `pandoc` command" design (S1) would need a separately built WASI command module (GHC wasm backend, a long CI job). That is only worth doing if running pandoc inside `jsc` fails.
+
+**Revised plan for the a-Shell route.** Because of finding 1, the primary candidate is simpler than the issue's design: one bundled script run by `jsc` does everything — `prepareRender`, pandoc via a *synchronous* variant of `pandoc-core` (sync `Module`/`Instance`, no Blob), `finalizeRender`, write the HTML — with no temp job folder, no defaults file and no `jsc.system('pandoc …')`. S1 (command build) is **parked, not prepared**: per the issue, "if Wasm does work, skip S1", and every indication is that it does. If S3/S3b fail on the device, S1 is the next thing to prepare.
+
+**Spike kit** (`cli/spikes/ashell/`, throw-away): `build.mjs` produces three self-contained IIFE scripts and a fixture deck in `slipway-ashell-spike.tar.gz` (2.3 MB, committed so it can be fetched from `raw.githubusercontent.com`):
+
+- `s3-wasm.js` — S3 plus the host half of S2: `typeof WebAssembly`, synchronous compile of a tiny module, 512 MB memory growth, a globals inventory (`TextEncoder`, `btoa`, `performance`, …), `jsc` text and binary round-trips, relative paths, what a missing file returns, `jsc.system` exit codes and blocking, and whether promise / timer callbacks run after the script returns.
+- `s2-stages.js` — S2: `prepareRender` (Dart Sass) and `finalizeRender` on the fixture, fed pandoc's canned output for that exact job, SHA-256 compared with core's `demo-slide` golden; plus whether core's promise-based `buildRenderInputs` resolves under `jsc`.
+- `s3b-render.js` — the full route: read the 58 MB wasm through `readFileBase64`, decode, compile + instantiate synchronously, render, compare with the golden; a second run checks the cached-instance path.
+
+Each prints PASS/FAIL lines with timings and saves `report-*.txt`. Step-by-step instructions are in a comment on issue #41.
+
+**Local emulation** (`emulate.cjs`): a headless Chromium page with the same `jsc` object, its `prompt()` messages answered from Node with the same semantics as the Swift side. All three scripts pass there: the full render is byte-identical to the golden (first run ~4–5 s including a 2.3 s base64 read of the wasm; cached-instance re-run ~0.5 s). The emulation also caught something worth probing on the device: Chromium truncates a `prompt()` message at ~10 kB, which silently truncated `jsc.writeFile` of the 919 kB deck. WebKit's limit, if any, is unknown, so the scripts now write through a verified path — write, read back, compare, and fall back to appending chunks with `cat` — and report which strategy was needed. This is emulation of the bridge protocol only: it is Chromium, not WebKit, and says nothing about iPadOS memory limits.
+
+**Open questions only the device can answer:** WebAssembly present and synchronous compile of a 58 MB module allowed; memory headroom for a 78 MB base64 string + the module + pandoc's heap inside the web view; compile and render times; whether large `prompt()` payloads survive in both directions; whether the cached instance persists between `jsc` runs.
+
+**Outcome so far:** S2 and S3 pass in emulation; device run pending. Per the issue's decision rule, nothing further is built on the a-Shell route (4.3) until Dani has run the kit and the results are recorded here. *(Update: run on 2026-11-11 — see "4.2 device results" below.)*
+
+### Increment 4.2 — device results (Dani, a-Shell on iPad, 2026-11-11)
+
+Posted on issue #41. Every probe passed.
+
+- **S3 (environment):** `WebAssembly` is there; synchronous `Module` + `Instance` works; memory grows to 512 MiB. The page is `https://localhost:8443/wasm.html` with a Safari user agent, confirming the web-view reading of a-Shell's source. `TextEncoder`, `btoa`/`atob`, `performance`, `fetch`, `Blob`, `Worker` all exist. `jsc` text and binary round-trips, relative paths, `listFiles`/`isFile`/`getFileSize` behave; a missing file's `readFile` returns the error *text* (so callers must check `isFile` first). `jsc.system` returns the exit code as a string (`"0"`, `"2"` for `false`) and blocks. **A 2 MB `writeFile` goes through in one message** — the chunked fallback the emulator needed is not needed on WebKit. Promise and timer callbacks do run after a script returns. (`jsc` shows as "undefined" in the globals list only because it is a lexical `const` in the page, not a property of `globalThis`.)
+- **S2 (JS stages):** Dart Sass compiles (19 ms cold, 3 ms warm); the pandoc job matches the build machine's; `finalizeRender` on the canned output is **identical to the golden**; core's promise-based `buildRenderInputs` resolved.
+- **S3b (full render):** **identical to the golden**, with the instance cached on the web view reused: `pandoc.convert` 94 ms, whole render **281 ms**.
+
+**Gaps in what came back:** `report-s3b.txt` is overwritten by each run, and the kit asked for two, so only the second (cached) run was captured. The first run evidently worked — the cached instance exists and nothing crashed — but how long reading, decoding and compiling the 58 MB module takes on the device, and how close it comes to the memory ceiling, was not recorded. Device model, iPadOS and a-Shell versions weren't posted either. Also not exercised on the device: a theme that triggers Sass deprecation notices (the fixture used `theme.scss`, which has none).
+
+**Decision, per the issue's rule:** S3b identical → build 4.3 as a single `jsc` script. S1 (a pandoc command build) is dropped.
+
+### Increment 4.3: a-Shell adapter
+
+`slipway render` now runs fully offline in a-Shell on iPad, as one script for `jsc`: `cli/dist/slipway-ashell.js` (4.2 MB) with `pandoc.wasm` beside it.
+
+**Core gained a synchronous path** (additive; goldens unchanged):
+
+- `createPandocInstanceSync(wasm)` (`core/src/pandoc-sync.js`) — the spike's driver promoted: `new WebAssembly.Module` + `Instance`, and a `convert()` that takes strings / `Uint8Array`s and returns directly. Same WASI setup and convert protocol as the vendored async glue.
+- `buildRenderInputsSync(qmdPath, fs: ProjectFSSync)` and `renderDeckSync(pandoc, inputs)`. To avoid two copies of the resolution rules, `project.ts` was split into a pure `planRenderInputs` (which files does this deck need?) plus an assemble step; the async and sync functions differ only in how they read.
+- A new golden test renders three fixture decks through the fully synchronous path and requires the same hashes as the async one.
+
+**The adapter** (`cli/src/ashell/`): a `ProjectFSSync` over `jsc.listFiles` / `readFile` / `readFileBase64` with the same ignore rule and sort as every other surface; the same project-root rule as the desktop CLI; usage text and argument parsing shared with it (`src/args.ts`, split out of `cli.ts`). Shaped by what the spikes showed:
+
+- **Pandoc stays loaded.** The instance is kept on `globalThis` (keyed by CLI version, wasm path and size), so only the first render in an a-Shell window reads and compiles the module; `jsc --reset` drops it.
+- **IIFE bundle**, since every `jsc` run shares the page's global scope.
+- **Base64 decoding is hand-rolled** rather than `atob`, to avoid a second 58 MB string while loading the wasm; the loaded bytes are checked against the file size and the wasm magic.
+- **Writes are verified** by comparing the file's size with the HTML's byte length (one `writeFile` suffices on the device; the check is there in case that ever stops being true).
+- **No exit status.** A `jsc` script cannot set one, so the issue's exit codes don't apply on this surface: errors and warnings are printed, a failed render writes nothing and prints no `Output created:` line. Documented in the README and SPEC.
+
+**Deviation from the issue's 3b design:** no external `pandoc` command, no temp job folder, no defaults file, no `jsc.system` — the 4.2 findings made them unnecessary.
+
+**Tests** (`cli/test/ashell.test.ts`, 8): the *built* script evaluated the way a-Shell evaluates it — in a persistent `node:vm` global scope offering `jsc`, `prompt` and `process.argv`, with a-Shell's return conventions (`listFiles` ending in an empty entry, the argv preamble). Demo deck, Imago showcase (fonts through `readFileBase64`, `--root ..`), the PNG fixture, `-o` and `--print` all match core's goldens; a second run in the same window does not re-read the wasm; `_quarto.yml` root; ignored folders; warnings / `--verbose`; Sass and pandoc errors write nothing; usage errors; a clear message when `pandoc.wasm` is missing. This is a Node stand-in, not WebKit: what it adds over the device spike is coverage of the adapter's own logic, and what the device spike adds is that the host really behaves this way. **The shipped adapter itself has not yet run on the iPad** — that is on the 4.7 list.
+
+**Distribution:** `assemble-site.sh` publishes `slipway-ashell.js` and `pandoc.wasm` under `/slipway/cli/` (the site grows to ~215 MB, three raw copies of the wasm); `cli/index.html` and `cli/README.md` carry the install steps. Neither file is in the npm tarball.
+
+**Install guide:** `cli/README-ashell.md` (install, an optional `slipway` alias in `~/Documents/.profile`, use, update, uninstall) is published as `/slipway/cli/README.md` beside the files, and the install step saves a copy to `~/Documents/bin/slipway-README.md` so it can be read offline. The alias is untested on the device; the guide falls back to the full `jsc …` form if a-Shell doesn't recognise `alias`.
+
+**Cleanup:** the spike kit (`cli/spikes/ashell/`, including its committed 2.3 MB tarball) is removed now that the route is decided; it remains in history at `c7d80b1`.
+
+Core 97 tests, CLI 26, app 10, vscode 42.
+
+### Increment 4.4: VS Code web extension — scaffold, pandoc at activation, preview, render-on-save
+
+New package `vscode/`: a web extension (`"browser": "./dist/extension.js"`, `"main"` pointing at the same bundle for desktop), publisher `darribas`, `engines.vscode ^1.85.0`, activation on `onLanguage:quarto` and `onWebviewPanel:slipway.preview`, contributing the `quarto` language for `.qmd` (no grammar).
+
+- **Build.** esbuild `platform: "browser"`, `format: "cjs"`, `external: ["vscode"]`, plus a plugin that fails the build on any Node built-in import anywhere in the graph. Output: `dist/extension.js` (4.2 MB — core, Dart Sass, reveal.js, KaTeX and fonts inline) and `dist/pandoc.wasm` copied beside it.
+- **Pandoc at activation.** `activate()` awaits `workspace.fs.readFile(extensionUri/dist/pandoc.wasm)` + `createPandocInstance` under a "Slipway: loading renderer…" notification, falling back to `fetch` of the same URL if the host doesn't expose the extension folder through `workspace.fs` (still at activation). Nothing is loaded lazily afterwards. The load time is logged to a "Slipway" output channel.
+- **Project files.** A `ProjectFS` over `workspace.fs`: root = the workspace folder containing the deck (else the deck's folder); file list via `findFiles` with a fallback to walking `workspace.fs.readDirectory` when the file system has no search provider; the same ignore rule as the CLI (hidden folders, `node_modules`) and the same sort, so all surfaces see the same project. The list is cached and dropped by a `FileSystemWatcher`, but the cache is only trusted on `file:` roots — on virtual file systems (blink-fs) every render re-lists, since watchers may not fire there. Open editors are read from their buffers.
+- **Preview.** One `WebviewPanel` per deck (`retainContextWhenHidden`, scripts on, no local resource roots). `webview.html` is the rendered deck plus two injections (`src/webview.ts`): the CSP meta from the issue, first in `<head>`, and a bridge script before the last `</body>` that posts `ready` / `slideChanged {h,v}`, obeys `goto {h,v}`, and restores the slide the previous render was on. A failed render (Sass or pandoc) leaves the last good render on screen.
+- **Commands and trigger.** `slipway.previewToSide` (editor title button on `.qmd`), `slipway.preview`, `slipway.render`; `slipway.renderOn` = `save` (default) or `manual`. Saving *any* non-ignored file in a deck's project re-renders that deck (so saving the theme updates the preview); requests arriving mid-render collapse into one follow-up render.
+
+**Tests.**
+
+- `vscode/test/unit.test.ts` — paths and the webview HTML builder (CSP position and content, bridge placement after an inlined `"</body>"` literal, the deck left byte-for-byte intact).
+- `vscode/test/extension.test.ts` — the **built bundle** loaded in Node against a fake `vscode` module (`fake-vscode.ts`: real Uris, a workspace over a temp copy of the demo project, documents, panels, commands). Covers: pandoc.wasm read exactly once during `activate()`; every contributed command registered; `previewToSide` opens one panel and the rendered HTML's SHA-256 equals **core's golden** (demo deck and the Imago showcase with its `../assets` theme + fonts); one render per save; theme save re-renders; a burst of four saves → two renders; `manual` mode ignores saves and renders the unsaved buffer on command; a Sass error keeps the last good render; slide position survives a re-render. 21 tests.
+- `vscode/scripts/check-webview.cjs` (manual, Playwright) — the preview document in headless Chromium under its CSP with every network request refused: reveal.js boots (29 slides), the start position is restored, `slideChanged` is posted, `goto` moves the deck, KaTeX's `data:` fonts load, the theme applies, no requests are attempted, no page errors. One CSP violation is reported and is expected: reveal's own `white.css` begins with `@import url(./fonts/source-sans-pro/…)`, a relative URL that cannot resolve once the stylesheet is inlined (it fails the same way in the PWA's iframe). The CSP refusing it is the wanted behaviour. Stripping that dead import in core would change the goldens for every surface, so it is left alone and noted under cleanup.
+- `vscode/test-web/` — a separate small package running the bundle inside **real VS Code for the Web** with `@vscode/test-web` (headless Chromium, the demo project mounted as a virtual file system): activation loads pandoc; after activation the suite replaces `fetch` / `XMLHttpRequest` / `importScripts` / `WebSocket` in the extension host with functions that throw and record; `previewToSide` opens a panel and renders the golden HTML; the Imago showcase resolves through the virtual FS; saving triggers exactly one render; nothing touched the network. **This suite could not be run in the authoring sandbox** (VS Code's download hosts are blocked by its network policy); it runs in the new `vscode` CI job. See 4.4a for its first CI run.
+
+`ci.yml` gains the `vscode` job (unit + bundle tests, then test-web).
+
+**Not in this increment (4.5):** export commands, cursor sync and its toggle, diagnostics in the Problems panel, the remaining settings (`type` trigger, `debounceMs`, `exportPath`, `projectRoot` is already read), the panel serializer.
+
+### Increment 4.4a: first run in real VS Code for the Web (CI)
+
+The `CI` workflow was dispatched on the branch to run what the sandbox can't. `core`, `app`, `cli` and the extension's unit + bundle tests were green on GitHub's runners. In the `@vscode/test-web` step — real VS Code for the Web, headless Chromium, the extension served over HTTP exactly as Pages will serve it — the extension **activated in 888 ms, of which loading + instantiating the 58 MB `pandoc.wasm` took 646 ms** (localhost, so no real network latency; the iPad number comes in 4.7).
+
+The step then failed for a reason in the test, not the extension: the suite's "cut the network after activation" replaced `fetch` in the extension host, but in `@vscode/test-web` the workspace's virtual file system is itself an extension in that same worker, serving files with `fetch()` from the test server's `/static/mount`. Opening the deck therefore failed. The cut now lets exactly those workspace-mount reads through (and counts them) and refuses and records everything else. Fix shipped with 4.5.
+
+### Increment 4.5: Extension — export, cursor sync, diagnostics, settings, serializer
+
+- **Export.** `slipway.exportHtml` (palette; editor and explorer context menus on `.qmd`) renders the deck fresh and writes the self-contained HTML through `workspace.fs` to `slipway.exportPath` (default `${fileDirname}/${fileBasenameNoExtension}.html`; supports `${fileDirname}`, `${fileBasename}`, `${fileBasenameNoExtension}`, `${fileExtname}`, `${workspaceFolder}`; relative paths are relative to the deck). It works with or without an open preview and doesn't count as a preview render. `slipway.exportPrintHtml` (the issue's v1.x item — it was one call to `buildPrintVariant`) writes `<name>.print.html` beside it. A failed render writes nothing and reports why.
+- **Cursor sync.** `onDidChangeTextEditorSelection` → `slideMap` (with the include map from the deck's last render) → `slideAtLine` → `goto {h,v}` to the preview, sent only when the slide changes. `slipway.toggleSync` (preview title bar) flips `slipway.syncCursor`.
+- **Diagnostics.** A `slipway` `DiagnosticCollection` on the deck: a failed render (Sass error, pandoc error) is an Error; pandoc and Sass warnings are Warnings; informational notes (loaded bibliography, Sass deprecations) stay in the output channel. Neither pandoc nor the pipeline reports source lines, so everything sits on line 1. A clean render clears them.
+- **Settings.** `slipway.renderOn` gains `"type"` (debounced by `slipway.debounceMs`, default 1000, floor 200); `slipway.syncCursor`, `slipway.exportPath`, `slipway.projectRoot` (relative to the workspace folder, absolute, or a full URI; ignored if it doesn't contain the deck).
+- **Serializer.** The bridge keeps `{deck, h, v}` in the webview's persisted state; a `WebviewPanelSerializer` re-adopts the panel after a window reload, re-renders, and returns to the slide. A panel with no usable state is closed rather than left blank. (After a reload the extension activates again and re-reads `pandoc.wasm`, which is why this only helps online, as the issue says.)
+
+**Tests** (fake-`vscode` bundle suite, now 38 with the unit tests): the exported file's hash equals core's golden and contains no external script, stylesheet or CSS `url(http…)`; `exportPath` and the explorer-menu Uri argument; print export; failed export writes nothing; cursor moves produce exactly one `goto` per slide change with the indices pandoc would assign, and none when sync is off or the deck has no preview; an error diagnostic appears and clears; a missing citation is a Warning while "Loaded references.bib" is not shown; `type` mode renders once per burst and saving doesn't double it; the serializer restores deck and position. The test-web suite also exports through the virtual file system and checks the same properties.
+
+### Increment 4.5a: only re-render decks a saved file actually affects
+
+Second CI run in real VS Code for the Web: activation 675 ms (pandoc 496 ms); `previewToSide` rendered HTML **identical to the golden through the virtual file system**; the Imago showcase resolved its `../assets` theme, fonts and bibliography the same way. Then the suite's "saving triggers exactly one render" failed with two — and that was the extension, not the test: with two previews open in one folder, saving `slide.qmd` also re-rendered the showcase, because 4.4 treated every file in the project as a dependency of every open deck (another `.qmd` *might* be an include).
+
+New rule (`affectsDeck` in `src/paths.ts`): the deck itself, and themes / bibliographies / images / fonts anywhere in the project, always trigger a re-render (those are resolved forgivingly project-wide, so any may matter); another markdown file only does if the deck's source includes it with `{{< include >}}` (matched by path or basename, like the renderer does); ignored folders and exported `.html` never do. Unit-tested, plus a bundle test with two previews open: saving one deck renders only it, and saving `_snippet.qmd` renders only the deck that includes it. The test-web assertion now checks which deck rendered, not just how many. vscode: 42 tests.
+
+### Increment 4.6: Pages layout, release jobs, READMEs
+
+**One Pages site, three surfaces.** `deploy.yml` now builds and tests `core`, `app`, `cli` and `vscode`, then `.github/scripts/assemble-site.sh` assembles:
+
+```
+_site/
+  …            app/dist — the PWA at the root; its URLs are unchanged
+  vscode/      package.json, dist/extension.js, dist/pandoc.wasm, README.md, LICENSE, icon.png
+  cli/         slipway-cli-<version>.tgz, index.html (install command + link)
+```
+
+The script refuses to run if a package isn't built or if `app/dist` ever grows a `vscode/` or `cli/` folder of its own, and checks the tarball name against `cli/package.json`. Assembled locally: 153 MB. The PWA's service worker got `navigateFallbackDenylist` for `/vscode/` and `/cli/` so a browser with the PWA installed doesn't answer a visit to those paths with the app shell (verified in the built `sw.js`). `/slipway/vscode/` and `/slipway/cli/` are permanent addresses; a test channel would go under `/vscode/next/`.
+
+**Releases.** New `release.yml`: pushing a tag `vscode-v<version>` builds, tests and packages `slipway-<version>.vsix` (`vsce package --no-dependencies` — everything is bundled; the only dependencies are dev ones, including the `file:` link to core); `cli-v<version>` does the same for `slipway-cli-<version>.tgz`. The tag must match that package's `package.json` version or the job fails. Each package keeps its own version. Packaging was tried locally: the `.vsix` is 16.7 MB with exactly `package.json`, `dist/extension.js`, `dist/pandoc.wasm`, `README.md`, `LICENSE`, `icon.png` (`vscode/.vscodeignore`).
+
+**Docs.** `vscode/README.md` (install from the URL in VS Code for the Web / Blink Code, `.vsix` on desktop, what "offline" means, commands, settings); `cli/README.md` gained update and release notes; `SPEC.md` has a new **Surfaces** section; the Deployment section of this file describes the new pipeline and the bandwidth picture.
+
+**CI, all green on the branch** (run 42998723647, dispatched manually): `core`, `app`, `cli`, `vscode`, and the `@vscode/test-web` suite in real VS Code for the Web — activation 973 ms (pandoc.wasm 715 ms, served from localhost), `previewToSide` output identical to the golden, the Imago showcase resolved through the virtual file system, exactly one render on save, `exportHtml` wrote a self-contained 999 560-byte file, and nothing in the extension host touched the network after activation (17 workspace-file reads went through the harness's own mount, which is exempt).
+
+**Not verified here, and why:**
+
+- The deploy and release workflows only run on `main` / on tags, so they have not executed. The assembly script they call was run locally; `release.yml`'s packaging commands were run locally; the workflow YAML itself is unexercised until the first merge and the first tag.
+- **CORS check (`curl -I` on the extension URL)** — the issue asks for it once. It can only be done after the first deploy to Pages, and this sandbox's network policy blocks `darribas.github.io` anyway. GitHub Pages sends `access-control-allow-origin: *` on every response, which is what VS Code for the Web needs; to confirm after merging: `curl -sI https://darribas.github.io/slipway/vscode/package.json | grep -i access-control`. It is on the 4.7 checklist.
+
+### Increment 4.7: Manual iPad acceptance — pending (Dani)
+
+Not run yet; it needs things an agent can't do and that don't exist until this branch is merged.
+
+- **Extension in Blink Code** — needs the extension live at `https://darribas.github.io/slipway/vscode/`, i.e. after the first deploy from `main`. The checklist is posted on issue #41: install from the URL and survive a Blink relaunch; preview the Imago showcase with theme, fonts, math and images; cursor sync; exported HTML opens from Files in Safari with Wi-Fi off; the 10-minute airplane test; plus the activation time on the iPad and the `curl -I` CORS check.
+- **a-Shell** — the 4.2 spike kit was run and passed (see "4.2 — device results"); what remains is running the shipped adapter (4.3) itself: install from `/slipway/cli/`, render a deck that uses the Imago theme (Sass deprecation path, fonts), note the time of the first render in a fresh window, and repeat with Wi-Fi off.
+- **PWA on iPad** — unchanged output is proven by the goldens and by the headless-browser check of the built PWA (4.0d), but "still works offline on iPad as before" is a device check; it is on the same checklist.
+
+Results to be recorded here when they come back.
+
+-----
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)
 
 - **Fix Dockview light/dark theme cascade** (the increment 2 cosmetic gap). Drive the dock theme from the same CSS variables as the toolbar instead of `prefers-color-scheme` on the dock host.
 - **Migrate `imago.scss` off `darken()`/`lighten()`.** Both are deprecated in Dart Sass; output is correct today but each render emits warnings. The file now lives in `test/fixtures/imago-workshop/` — a frozen test fixture, so low urgency, but the warnings still surface in test output.
+- **reveal.js's dead font `@import`.** `white.css` / `black.css` start with `@import url(./fonts/source-sans-pro/source-sans-pro.css)`, which can't resolve once inlined (PWA iframe, exported HTML, VS Code webview alike), so decks never get Source Sans Pro from it and browsers log a failed/blocked load. Either strip the import in `inline-assets.ts` or inline the font; both change rendered bytes for every surface (re-record goldens).
 - **Clean up `test/` directory naming** if we add more test types (right now it's `smoke.test.ts` plus `fixtures/`; if unit tests grow, organise into `test/unit/` and `test/smoke/`).
 - **PHASES.md increment ordering.** Within Phase 2 the increment 5e–8 blocks sit in descending order (8, 7, 6, 5e) rather than ship order, which works against CLAUDE.md's "read bottom-up for most recent" guidance. Increments 10+ are in ascending ship order; reordering that older batch to match is a deferred tidy-up.
 
@@ -747,13 +986,15 @@ Small tidy-ups to land at the next natural stopping point — none are blocking,
 
 ### How it works
 
-Every push to `main` (and the manual **Run workflow** button) triggers:
+Every push to `main` (and the manual **Run workflow** button) triggers `deploy.yml`:
 
-1. `cd app && npm ci && npm run build`
-2. Upload `app/dist/` as the Pages artifact
-3. `actions/deploy-pages@v4` publishes it
+1. `npm ci` + `npm test` in `core/`
+2. `npm ci`, `npm test`, `npm run build` in `app/`
+3. `npm ci` + `npm test` in `cli/` and in `vscode/` (their `pretest` builds `dist/`, so what is published is what was just tested)
+4. `.github/scripts/assemble-site.sh _site` lays out one site — the PWA at the root, the unpacked extension under `vscode/`, the CLI tarball under `cli/` (see Increment 4.6)
+5. Upload `_site/` as the Pages artifact; `actions/deploy-pages@v4` publishes it
 
-Total run time ≈ 1–2 minutes. The deploy job's own `npm run build` step runs `tsc --noEmit` first, so a typecheck regression fails CI before publishing.
+`release.yml` separately attaches `slipway-<v>.vsix` / `slipway-cli-<v>.tgz` to a GitHub Release when a `vscode-v*` / `cli-v*` tag is pushed.
 
 ### One-time GitHub UI step
 
@@ -773,4 +1014,6 @@ Relative URLs in the built HTML resolve correctly under any subpath, so the buil
 
 ### Capacity headroom
 
-Total deployed footprint ~62 MB (58 MB `pandoc.wasm` + 4 MB JS). Pages limits: 100 MB/file, 1 GB/site (we're well under both). Soft bandwidth cap is 100 GB/month — about 1,600 first-time visits before throttling. Hashed asset filenames mean repeat visits hit the browser cache and cost zero bandwidth.
+Deployed footprint since Phase 4: **~153 MB** — the PWA (~62 MB: 58 MB `pandoc.wasm` + 4 MB JS), the extension (~60 MB: its own copy of `pandoc.wasm` + 4.2 MB JS) and the CLI tarball (17.6 MB, the wasm compressed inside it). Pages limits: 100 MB/file, 1 GB/site — well under both. The a-Shell adapter (4.3) adds a third raw `pandoc.wasm` plus its 4.2 MB script under `cli/`, for **~215 MB** in all.
+
+Soft bandwidth cap is 100 GB/month. The PWA costs bandwidth once per visitor (hashed assets, then the service worker). **The extension is the new cost**: VS Code for the Web re-fetches an extension installed from a URL on every launch, and `pandoc.wasm` is 58 MB raw. If Pages serves it gzip-compressed (as it does `application/wasm` for the PWA; ~16 MB on the wire) that is roughly 6,000 launches a month; uncompressed, about 1,700. Whether the browser's HTTP cache turns repeat launches into cheap revalidations inside VS Code for the Web / Blink Code is not known yet — to be observed in the 4.7 iPad run (Blink relaunch timing with and without a warm cache). For one author this is a non-issue either way; it only matters if the extension gets many users.

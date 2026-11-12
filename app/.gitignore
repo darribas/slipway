@@ -3,3 +3,5 @@ dist
 .DS_Store
 *.log
 .vite
+# Written by scripts/gen-assets.mjs (npm pre-hooks)
+src/generated/

@@ -1,9 +1,11 @@
-# The app is a self-contained Vite project under app/. There should never be
-# a node_modules or package.json at the repo root; if these appear, an npm
-# command ran from the wrong directory.
+# Each package (app/, core/, and later cli/ and vscode/) is self-contained
+# with its own package.json; there is deliberately no root npm workspace.
+# There should never be a node_modules or package.json at the repo root; if
+# these appear, an npm command ran from the wrong directory. (Patterns are
+# anchored to the root so the packages' own manifests stay tracked.)
 node_modules/
-package.json
-package-lock.json
+/package.json
+/package-lock.json
 
 # Editor / OS noise
 .DS_Store
@@ -11,3 +13,6 @@ package-lock.json
 .vite
 .idea/
 .vscode/
+
+# Assembled Pages site (.github/scripts/assemble-site.sh)
+/_site/

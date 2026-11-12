@@ -1,6 +1,13 @@
-# PR gate. Runs the smoke test + typecheck + production build on every
-# pull request targeting main, so a broken commit can't merge.
-# The deploy workflow runs the same steps on main itself before publishing.
+# PR gate. Runs every package's tests + typecheck (+ build) on every pull
+# request targeting main, so a broken commit can't merge. The deploy workflow
+# runs the same steps on main itself before publishing.
+#
+# The repo has no root npm workspace (see CLAUDE.md): each package is
+# installed on its own, and every consumer of @slipway/core (a `file:../core`
+# dependency, symlinked by npm) needs core's dependencies installed too.
+#
+# All jobs run on every PR — in particular a change under core/ always runs
+# every consumer's tests, because all surfaces must render identical HTML.
 
 name: CI
 
@@ -14,7 +21,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,16 +30,113 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: core/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Typecheck (no DOM, no Node types)
+        run: npm run typecheck
+        working-directory: core
+
+      - name: Render tests + goldens (vitest)
+        run: npm test
+        working-directory: core
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            app/package-lock.json
+
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
 
       - name: Install dependencies
         run: npm ci
         working-directory: app
 
-      - name: Smoke test (vitest)
+      - name: Test (vitest)
         run: npm test
         working-directory: app
 
       - name: Typecheck + build
         run: npm run build
         working-directory: app
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            cli/package-lock.json
+
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: cli
+
+      # `npm test` typechecks and builds dist/ first (pretest), then runs the
+      # in-process tests and the tests against the built bundle + tarball.
+      - name: Typecheck + build + test
+        run: npm test
+        working-directory: cli
+
+  vscode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            vscode/package-lock.json
+            vscode/test-web/package-lock.json
+
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: vscode
+
+      # Typecheck, bundle (fails on any Node built-in import), then unit
+      # tests and the built bundle driven through a fake `vscode` module.
+      - name: Typecheck + build + test
+        run: npm test
+        working-directory: vscode
+
+      # The same bundle inside real VS Code for the Web, headless Chromium.
+      - name: Install the web test runner
+        run: npm ci
+        working-directory: vscode/test-web
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+        working-directory: vscode/test-web
+
+      - name: Test in VS Code for the Web (@vscode/test-web)
+        run: npm test
+        working-directory: vscode/test-web

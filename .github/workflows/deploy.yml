@@ -1,4 +1,11 @@
-# Builds the Vite app under app/ and deploys app/dist/ to GitHub Pages.
+# Builds all three surfaces and deploys one GitHub Pages site:
+#
+#   /            the PWA (app/dist), as always
+#   /vscode/     the VS Code web extension, unpacked — installed with
+#                "Developer: Install Extension From Location…"
+#   /cli/        the CLI's npm tarball — `npm install -g <url>`
+#
+# /vscode/ and /cli/ are permanent addresses (see assemble-site.sh).
 # Triggered automatically on every push to main, plus a manual dispatch
 # button for forced redeploys.
 #
@@ -38,26 +45,61 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            core/package-lock.json
+            app/package-lock.json
+            cli/package-lock.json
+            vscode/package-lock.json
 
-      - name: Install dependencies
+      # Every surface consumes the renderer from core/ (a file: dependency),
+      # so core's own dependencies must be installed first.
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Test core
+        run: npm test
+        working-directory: core
+
+      - name: Install app dependencies
         run: npm ci
         working-directory: app
 
-      - name: Test
+      - name: Test app
         run: npm test
         working-directory: app
 
-      - name: Build
+      - name: Build app
         run: npm run build
         working-directory: app
+
+      # `npm test` in cli/ and vscode/ builds dist/ first (pretest), so the
+      # files published below are the ones that were just tested.
+      - name: Install CLI dependencies
+        run: npm ci
+        working-directory: cli
+
+      - name: Build + test CLI
+        run: npm test
+        working-directory: cli
+
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: vscode
+
+      - name: Build + test extension
+        run: npm test
+        working-directory: vscode
+
+      - name: Assemble the site
+        run: .github/scripts/assemble-site.sh _site
 
       - uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: app/dist
+          path: _site
 
   deploy:
     needs: build

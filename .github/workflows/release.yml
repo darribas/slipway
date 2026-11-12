@@ -1,0 +1,93 @@
+# Attach installable artifacts to GitHub Releases.
+#
+#   tag vscode-v<version>  →  slipway-<version>.vsix   (desktop VS Code:
+#                              "Extensions: Install from VSIX…")
+#   tag cli-v<version>     →  slipway-cli-<version>.tgz (npm install -g <file or URL>)
+#
+# Each package keeps its own version; the tag must match the version in that
+# package's package.json. The Pages site (deploy.yml) is what VS Code for the
+# Web and `npm install -g https://darribas.github.io/slipway/cli/…` use;
+# releases are the versioned archive.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "vscode-v*"
+      - "cli-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            cli/package-lock.json
+            vscode/package-lock.json
+
+      - name: Work out what is being released
+        id: what
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in
+            vscode-v*) package=vscode; version="${tag#vscode-v}" ;;
+            cli-v*)    package=cli;    version="${tag#cli-v}" ;;
+            *) echo "unexpected tag $tag" >&2; exit 1 ;;
+          esac
+          actual="$(node -p "require('./$package/package.json').version")"
+          if [ "$version" != "$actual" ]; then
+            echo "tag $tag does not match $package/package.json version $actual" >&2
+            exit 1
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install core dependencies
+        run: npm ci
+        working-directory: core
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ steps.what.outputs.package }}
+
+      # Builds dist/ (pretest) and tests it.
+      - name: Build + test
+        run: npm test
+        working-directory: ${{ steps.what.outputs.package }}
+
+      - name: Package the extension (.vsix)
+        if: steps.what.outputs.package == 'vscode'
+        # --no-dependencies: everything is already bundled into dist/, and
+        # the only dependencies are dev ones (including a file: link to core).
+        run: npx --yes @vscode/vsce@3 package --no-dependencies -o "slipway-${{ steps.what.outputs.version }}.vsix"
+        working-directory: vscode
+
+      - name: Package the CLI (.tgz)
+        if: steps.what.outputs.package == 'cli'
+        run: npm pack --ignore-scripts
+        working-directory: cli
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.what.outputs.package }}" = vscode ]; then
+            file="vscode/slipway-${{ steps.what.outputs.version }}.vsix"
+            title="Slipway for VS Code ${{ steps.what.outputs.version }}"
+            notes="Desktop VS Code: download the .vsix and run **Extensions: Install from VSIX…**. VS Code for the Web / Blink Code: **Developer: Install Extension From Location…** with https://darribas.github.io/slipway/vscode/"
+          else
+            file="cli/slipway-cli-${{ steps.what.outputs.version }}.tgz"
+            title="slipway CLI ${{ steps.what.outputs.version }}"
+            notes="Install with \`npm install -g <this .tgz>\` (Node.js 20+). No dependencies are downloaded."
+          fi
+          gh release create "$GITHUB_REF_NAME" "$file" --title "$title" --notes "$notes"

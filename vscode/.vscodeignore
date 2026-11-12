@@ -1,0 +1,9 @@
+# The .vsix (and the folder served from GitHub Pages) carries only what VS
+# Code loads: package.json, dist/, README.md, LICENSE, icon.png.
+**
+!package.json
+!dist/extension.js
+!dist/pandoc.wasm
+!README.md
+!LICENSE
+!icon.png

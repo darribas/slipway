@@ -1,0 +1,4 @@
+node_modules
+*.log
+# Written by scripts/gen-assets.mjs (npm pre-hooks)
+src/generated/

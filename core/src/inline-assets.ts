@@ -1,0 +1,287 @@
+// Inline external CDN references in a pandoc revealjs-standalone HTML
+// document so the rendered deck has zero network dependencies.
+//
+// Pandoc 3.9's revealjs template emits hard-coded `<script>` / `<link>` tags
+// pointing at unpkg.com/reveal.js@^5/...  That puts every render at the mercy
+// of unpkg's resolution of `^5` AND breaks any offline use case. This pass
+// replaces those URLs with `<style>` / `<script>` blocks holding the bundled
+// reveal.js source — pinned to the version in package.json (currently
+// reveal.js@5.2.1) and updated only when the dep is bumped.
+//
+// The asset strings (reveal.js, its plugins and base themes, KaTeX with its
+// fonts as data URIs) come from src/generated/assets.ts, a plain TS module
+// written by scripts/gen-assets.mjs — no bundler-specific imports here.
+
+import {
+  katexCss,
+  katexJs,
+  revealCss,
+  revealJs,
+  revealNotesJs as notesJs,
+  revealResetCss as resetCss,
+  revealSearchJs as searchJs,
+  revealThemeBlackCss as themeBlackCss,
+  revealThemeWhiteCss as themeWhiteCss,
+  revealZoomJs as zoomJs,
+} from "./generated/assets";
+
+type AssetKind = "css" | "js";
+interface Asset {
+  kind: AssetKind;
+  content: string;
+}
+
+// Map every unpkg URL pandoc's template can emit to its bundled equivalent.
+// Pandoc resolves `theme=white` (which we pass) to white.css, but black is
+// pandoc's default fallback if no theme is set — include both so a render
+// without our theme override still inlines correctly.
+const REVEAL_ASSETS: Record<string, Asset> = {
+  "https://unpkg.com/reveal.js@^5/dist/reset.css": { kind: "css", content: resetCss },
+  "https://unpkg.com/reveal.js@^5/dist/reveal.css": { kind: "css", content: revealCss },
+  "https://unpkg.com/reveal.js@^5/dist/theme/white.css": { kind: "css", content: themeWhiteCss },
+  "https://unpkg.com/reveal.js@^5/dist/theme/black.css": { kind: "css", content: themeBlackCss },
+  "https://unpkg.com/reveal.js@^5/dist/reveal.js": { kind: "js", content: revealJs },
+  "https://unpkg.com/reveal.js@^5/plugin/notes/notes.js": { kind: "js", content: notesJs },
+  "https://unpkg.com/reveal.js@^5/plugin/search/search.js": { kind: "js", content: searchJs },
+  "https://unpkg.com/reveal.js@^5/plugin/zoom/zoom.js": { kind: "js", content: zoomJs },
+};
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Inject a Reveal.configure() call that overrides whatever reveal.js options
+ * pandoc's template chose to emit. This is the only reliable way to make
+ * boolean-false options like `controls: false` actually take effect: pandoc's
+ * template uses `$if(controls)$` to decide whether to emit the option, and
+ * `$if$` treats boolean false as "not set" — so pandoc silently falls back
+ * to reveal.js's default (which is true). Reveal.configure() runs after init
+ * and unconditionally applies whatever we hand it.
+ *
+ * If `opts` is empty, the original HTML is returned unchanged.
+ */
+export function injectRevealConfigOverride(html: string, opts: Record<string, unknown>): string {
+  if (!opts || Object.keys(opts).length === 0) return html;
+  const literal = JSON.stringify(opts);
+  const script = `<script data-from="slipway:user-reveal-config">
+(function () {
+  var opts = ${literal};
+  function apply() { if (window.Reveal && Reveal.configure) Reveal.configure(opts); }
+  if (window.Reveal && Reveal.isReady && Reveal.isReady()) apply();
+  else if (window.Reveal && Reveal.addEventListener) Reveal.addEventListener('ready', apply);
+  else document.addEventListener('DOMContentLoaded', function () {
+    if (window.Reveal) {
+      if (Reveal.isReady && Reveal.isReady()) apply();
+      else Reveal.addEventListener('ready', apply);
+    }
+  });
+})();
+</script>`;
+  // Insert before the LAST `</body>`. A naive first-match regex can land
+  // inside an inlined plugin script that happens to contain `</body>` as a
+  // string literal (reveal.js's notes plugin embeds `"</body>\n</html>"`
+  // when constructing the speaker-view popup), which splits the plugin in
+  // half and breaks the whole bundle.
+  const lastBody = html.lastIndexOf("</body>");
+  if (lastBody < 0) return html + script;
+  return html.slice(0, lastBody) + script + "\n" + html.slice(lastBody);
+}
+
+/**
+ * Inline our compiled theme stylesheet into the rendered HTML.
+ *
+ * Pandoc emits `<link rel="stylesheet" href="theme.css">` in standalone
+ * output when we pass `css: ["theme.css"]`, but the actual file lives in
+ * pandoc's WASI VFS — *not* anywhere the iframe (srcdoc) can resolve. So
+ * the link tag pointed nowhere and the theme silently failed to apply.
+ * This pass swaps the link for an inline <style> block carrying the CSS
+ * we compiled (or read directly when the source was already .css).
+ */
+export function inlineThemeCss(html: string, css: string): string {
+  if (!css) return html;
+  const re = /<link\b[^>]*href=["']theme\.css["'][^>]*\/?>/g;
+  return html.replace(re, () =>
+    `<style data-from="theme.css">\n${css}\n</style>`,
+  );
+}
+
+/**
+ * Rewrite `url(...)` references inside compiled theme CSS to base64 data URIs.
+ *
+ * Theme stylesheets self-host fonts with `@font-face { src: url('fonts/x.woff2') }`.
+ * The compiled CSS is inlined into the deck as a <style> block that runs inside
+ * the sandboxed srcdoc iframe (null origin), where relative URLs don't resolve —
+ * exactly the same constraint that forces image and KaTeX-font inlining. This
+ * pass swaps every `url()` whose basename matches a known font asset for a
+ * `data:` URI so the typeface actually loads offline.
+ *
+ * `fontUris` is keyed by font-file basename (e.g. "figtree-latin-wght-normal.woff2").
+ * References that don't match a known asset are left untouched.
+ */
+export function inlineFontUrls(css: string, fontUris: Map<string, string>): string {
+  if (!css || fontUris.size === 0) return css;
+  return css.replace(
+    /url\(\s*(['"]?)([^'")]+\.(?:woff2|woff|ttf|otf))\1\s*\)/gi,
+    (match, _quote: string, ref: string) => {
+      const basename = ref.split("/").pop() ?? ref;
+      const uri = fontUris.get(basename);
+      return uri ? `url(${uri})` : match;
+    },
+  );
+}
+
+/**
+ * Replace the two CDN KaTeX tags pandoc emits with fully self-contained
+ * inline blocks. Pandoc uses `@latest` which resolves unpredictably and
+ * fails entirely when offline; this pins to the bundled version and
+ * eliminates the network dependency.
+ *
+ * The CSS variant produced by scripts/gen-assets.mjs already has all fonts
+ * embedded as data URIs, so the deck renders math correctly in the
+ * sandboxed srcdoc iframe (null origin, no relative URL resolution).
+ */
+export function inlineKatexAssets(html: string): string {
+  // Replace <script src="https://cdn.jsdelivr.net/npm/katex@.../katex.min.js">
+  html = html.replace(
+    /<script\b[^>]*src=["']https:\/\/cdn\.jsdelivr\.net\/npm\/katex[^"']*\/katex\.min\.js["'][^>]*><\/script>/g,
+    () => `<script data-from="slipway:katex-js">\n${katexJs}\n</script>`,
+  );
+  // Replace <link href="https://cdn.jsdelivr.net/npm/katex@.../katex.min.css" ...>
+  html = html.replace(
+    /<link\b[^>]*href=["']https:\/\/cdn\.jsdelivr\.net\/npm\/katex[^"']*\/katex\.min\.css["'][^>]*\/?>/g,
+    () => `<style data-from="slipway:katex-css">\n${katexCss}\n</style>`,
+  );
+  return html;
+}
+
+/**
+ * Inject a tiny polyfill that makes localStorage, sessionStorage, and
+ * history.pushState/replaceState safe inside a sandboxed iframe.
+ *
+ * The app preview iframe uses `sandbox="allow-scripts allow-popups"` without
+ * `allow-same-origin`, which gives it a null origin. Accessing localStorage or
+ * sessionStorage (and calling history.replaceState) from a null origin throws a
+ * SecurityError. reveal.js's notes plugin reads localStorage on every keydown
+ * event; if that throws uncaught, the entire Reveal keyboard handler dies —
+ * which is why slide navigation stops after fragments run out on a slide.
+ *
+ * The polyfill runs synchronously before any other script so all subsequent
+ * code (reveal.js, plugins) sees safe storage objects.
+ */
+export function injectSandboxCompat(html: string): string {
+  const script = `<script data-from="slipway:sandbox-compat">
+(function(){
+  function memStorage(){
+    var s={};
+    return{
+      getItem:function(k){return Object.prototype.hasOwnProperty.call(s,k)?s[k]:null},
+      setItem:function(k,v){s[k]=String(v)},
+      removeItem:function(k){delete s[k]},
+      clear:function(){s={}},
+      key:function(i){return Object.keys(s)[i]??null},
+      get length(){return Object.keys(s).length}
+    };
+  }
+  ['localStorage','sessionStorage'].forEach(function(name){
+    try{window[name].setItem('__t','1');window[name].removeItem('__t');}
+    catch(e){
+      try{Object.defineProperty(window,name,{configurable:true,value:memStorage()});}catch(e2){}
+    }
+  });
+  ['replaceState','pushState'].forEach(function(method){
+    var orig=history[method].bind(history);
+    history[method]=function(){try{orig.apply(history,arguments);}catch(e){}};
+  });
+})();
+<\/script>`;
+  // Insert right after the opening <body> tag so it executes before reveal.js.
+  return html.replace(/<body>/, "<body>\n" + script);
+}
+
+/**
+ * Inject `view: "print"` into the deck's Reveal.initialize call so reveal.js
+ * lays the deck out for PDF export — one slide per page, controls hidden,
+ * progress bar removed. This is the config-side equivalent of opening the
+ * deck with `?print-pdf` in the URL (which our srcdoc / blob deck doesn't
+ * have). If pandoc's template ever changes shape and the pattern doesn't
+ * match, the HTML is returned unchanged and the deck renders normally —
+ * still openable in a new tab, just without the print layout.
+ */
+export function injectPrintView(html: string): string {
+  return html.replace(/Reveal\.initialize\(\s*\{/, (m) => `${m}\n  view: "print",`);
+}
+
+/**
+ * Inline reveal's print stylesheet and a small script that opens Safari's
+ * print sheet once the deck has settled. Both go before the LAST </body>
+ * for the same reason injectRevealConfigOverride does — a naive first-match
+ * regex can land inside an inlined plugin script that happens to contain
+ * `</body>` as a literal string.
+ */
+export function inlinePrintAssets(html: string, printCss: string): string {
+  const block = `<style data-from="slipway:print-page">
+/* Force landscape orientation. iOS Safari ignores the exact dimensions
+   in @page { size: WIDTH HEIGHT }, so reveal.js's runtime page-sizing
+   rule is dropped on the floor and pages default to whatever paper the
+   print dialog picked — typically A4 portrait, which letterboxes a 16:9
+   deck and overflows each slide onto two pages. The landscape / portrait
+   keyword IS honored, and landscape A4 (297×210mm) fits a default reveal
+   slide (960×700px) comfortably — usually one slide per page. */
+@page { size: landscape; margin: 0; }
+</style>
+<style data-from="slipway:reveal-print">
+${printCss}
+</style>
+<script data-from="slipway:auto-print">
+(function () {
+  var done = false;
+  function go() {
+    if (done) return;
+    done = true;
+    // Brief settle so the print layout has finished laying out before the
+    // browser snapshots pages.
+    setTimeout(function () { try { window.print(); } catch (e) {} }, 200);
+  }
+  function wireup() {
+    if (window.Reveal && Reveal.addEventListener) {
+      Reveal.addEventListener('pdf-ready', go);
+      Reveal.addEventListener('ready', go);
+    }
+  }
+  if (document.readyState === 'complete') wireup();
+  else window.addEventListener('load', wireup);
+  // Hard fallback in case neither reveal event fires (older / patched reveal).
+  setTimeout(go, 2000);
+})();
+<\/script>`;
+  const lastBody = html.lastIndexOf("</body>");
+  if (lastBody < 0) return html + block;
+  return html.slice(0, lastBody) + block + "\n" + html.slice(lastBody);
+}
+
+/**
+ * Replace every <link>/<script> in `html` that points at one of our known
+ * reveal.js CDN URLs with an inline <style>/<script> block. Returns the
+ * rewritten HTML; leaves unrecognised external references alone.
+ */
+export function inlineRevealAssets(html: string): string {
+  for (const [url, asset] of Object.entries(REVEAL_ASSETS)) {
+    const u = escapeRegex(url);
+    if (asset.kind === "css") {
+      // Match <link ... href="URL" ...> or <link ... href='URL' ...>, both
+      // self-closing and the void form. Capture any extra attrs (e.g. id="theme")
+      // and forward them onto the <style> so any inherited handling still works.
+      const re = new RegExp(`<link\\b[^>]*href=["']${u}["'][^>]*/?>`, "g");
+      html = html.replace(re, () =>
+        `<style data-from="${url}">\n${asset.content}\n</style>`,
+      );
+    } else {
+      const re = new RegExp(`<script\\b[^>]*src=["']${u}["'][^>]*></script>`, "g");
+      html = html.replace(re, () =>
+        `<script data-from="${url}">\n${asset.content}\n</script>`,
+      );
+    }
+  }
+  return html;
+}
