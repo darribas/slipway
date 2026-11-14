@@ -41,6 +41,23 @@ Open a new window (or run `source ~/Documents/.profile`), then `slipway --versio
 If your a-Shell reports that `alias` is not found, skip this and use the full
 `jsc ~/Documents/bin/slipway-ashell.js …` form below.
 
+## Start a new deck
+
+`new-deck.sh` sets up a folder with a bundled theme, its fonts, a starter
+`deck.qmd` and (for Travelogue and Imago) a `showcase.qmd` showing everything
+the theme can do. Online, from the folder you want the deck in:
+
+```sh
+curl -L -O https://darribas.github.io/slipway/cli/new-deck.sh
+sh new-deck.sh mytalk                # Travelogue (the default)
+sh new-deck.sh mytalk imago          # or: imago, journal
+cd mytalk
+slipway render deck.qmd
+```
+
+Keep `new-deck.sh` around and reuse it for the next deck; download it again to
+pick up theme updates. It refuses to overwrite an existing folder.
+
 ## Use
 
 ```sh

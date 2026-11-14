@@ -1026,6 +1026,16 @@ Tests (`render.test.ts`): the key set, `relativeTo`, and four inlining cases —
 
 Still open from the issue's "related" notes: a theme's unused `@font-face` faces are inlined anyway, and there's no dedicated "export for the web" action (the rendered HTML is already a single self-contained file).
 
+### Increment 38: `new-deck.sh` — start a themed deck folder in one command
+
+Setting up a deck in a-Shell meant one long multi-line `curl` (theme, eight font files, licences, showcase) — fragile to paste on an iPad. `cli/new-deck.sh` does it: `sh new-deck.sh mytalk [travelogue|imago|journal]` creates `mytalk/` with `assets/<theme>.scss`, the theme's fonts and licences, a starter `deck.qmd` (theme line pointing at `assets/`), and for Travelogue / Imago a `showcase.qmd` (its `../assets/` paths rewritten to `assets/`, plus the Travelogue plate or Imago's `references.bib`). Refuses an existing folder or an unknown theme before writing anything.
+
+- Plain POSIX `sh` — `case`, a `for` over a newline-separated list, a heredoc, `sed` — so it runs under a-Shell's dash and any desktop shell. Downloads from `main` on raw.githubusercontent.com; `SLIPWAY_BASE` overrides the base URL.
+- Published at `/slipway/cli/new-deck.sh` by `assemble-site.sh` (and checked by the `site` CI job); documented in `cli/README-ashell.md` ("Start a new deck"), the `/cli/` index page and `themes/README.md` (step 4 of adding a theme).
+- `cli/test/new-deck.test.ts`: the script offers exactly `themes/*` and each theme's file list equals `themes/<name>/fonts/` (so a theme change can't silently break it); then, per theme, it runs under `sh` against this checkout (`SLIPWAY_BASE=file://…`) and the starter deck and showcase render with fonts and images inlined; plus default-theme, refusal and usage cases. cli 36.
+
+Untested on the device itself: a-Shell's `sh` is dash, as on the CI runner, but the first real run on the iPad is the acceptance check.
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)
