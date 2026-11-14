@@ -5,15 +5,15 @@
 //
 // Fonts (all SIL OFL 1.1, self-hosted under fonts/ so the theme works
 // offline — no network @import; see fonts/<family>/OFL.txt):
-//   Fraunces      headings and .passage   (variable: opsz, wght, SOFT, WONK)
+//   Fraunces      headings, .passage, and body in the "print" style
+//                 (variable: opsz, wght, SOFT, WONK — body uses its text cut)
 //   Courier Prime body, "typed" style
-//   Newsreader    body, "print" style     (variable: opsz, wght)
 //
 // Switch body style with $body-style below. The fonts/ paths resolve
 // relative to this stylesheet under `quarto render` too.
 
 
-// ---- body style: "typed" (Courier Prime) or "print" (Newsreader)
+// ---- body style: "typed" (Courier Prime) or "print" (Fraunces, text cut)
 $body-style: "typed" !default;
 
 // ---- palette (change these to retune the whole deck)
@@ -27,12 +27,12 @@ $rule:   mix($ink, $paper, 30%);
 
 // ---- fonts
 $typed-font: "Courier Prime", "Courier New", monospace;
-$print-font: "Newsreader", Georgia, serif;
+$print-font: "Fraunces", Georgia, serif;
 $font-family-sans-serif: $typed-font;
 $presentation-font-size-root: 34px;
 @if $body-style == "print" {
   $font-family-sans-serif: $print-font;
-  $presentation-font-size-root: 38px;
+  $presentation-font-size-root: 36px;
 }
 $presentation-heading-font: "Fraunces", Georgia, serif;
 $font-family-monospace: "Courier Prime", monospace;
@@ -69,14 +69,6 @@ $code-color: $ink;
   font-family: "Fraunces";
   src: url("fonts/fraunces/fraunces-latin-full-italic.woff2") format("woff2");
   font-weight: 100 900; font-style: italic; }
-@font-face {
-  font-family: "Newsreader";
-  src: url("fonts/newsreader/newsreader-latin-opsz-normal.woff2") format("woff2");
-  font-weight: 200 800; font-style: normal; }
-@font-face {
-  font-family: "Newsreader";
-  src: url("fonts/newsreader/newsreader-latin-opsz-italic.woff2") format("woff2");
-  font-weight: 200 800; font-style: italic; }
 @font-face {
   font-family: "Courier Prime";
   src: url("fonts/courier-prime/courier-prime-latin-400-normal.woff2") format("woff2");
@@ -147,8 +139,14 @@ $code-color: $ink;
 .reveal ul > li { position: relative; padding-left: 1.4em; margin-bottom: 0.35em; }
 .reveal ul > li::before { content: "–"; position: absolute; left: 0; color: $faded; }
 
+// "print": Fraunces at its text optical size — sturdier, lower contrast,
+// no wonky forms — so headings (opsz 144, WONK 1) still stand apart.
 @if $body-style == "print" {
-  .reveal p, .reveal li { font-variation-settings: "opsz" 16; }
+  .reveal p, .reveal li, .reveal figcaption, .reveal .caption,
+  .reveal #title-slide .subtitle, .reveal #title-slide .author,
+  .reveal #title-slide .date, .reveal .note {
+    font-variation-settings: "opsz" 14, "SOFT" 0, "WONK" 0;
+  }
 }
 
 // ---- highlights
