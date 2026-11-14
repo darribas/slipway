@@ -12,9 +12,11 @@ import { preprocessDeck, slideAtIndex, slideAtLine, slideMap } from "../src/inde
 import { loadPandoc } from "./helpers/pandoc";
 import { loadProjectInputs } from "./helpers/project";
 import { htmlSlideIndices } from "./helpers/slides";
+import { demoProject } from "../../themes/install.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
+// The demo template with the bundled themes (themes/) installed under assets/.
+const DEMO = demoProject();
 const IMAGO = resolve(HERE, "fixtures/imago-workshop");
 
 const pandoc = await loadPandoc();

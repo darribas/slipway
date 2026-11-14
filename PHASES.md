@@ -1003,6 +1003,16 @@ Caught while rendering through the CLI: Slipway layers a theme over plain reveal
 
 Found, not fixed here (#49): images in a subfolder of `assets/` aren't inlined (the renderer keys assets by basename, the markdown rewrite matches the path after `assets/`), so they stay relative links — why the showcase plate sits directly in `assets/`. `footer:` isn't rendered by Slipway. Tests: Travelogue catalog test, a no-shared-asset-paths test across all bundled themes, new `demo-travelogue-showcase` golden (existing goldens unchanged). 98 core / 12 app / 26 cli.
 
+### Increment 36: Bundled themes move to a top-level `themes/` (#48)
+
+The three bundled themes lived in the PWA's seed template (`app/src/templates/slipway-demo/assets/`) — historical, from when the app was the only surface. They now live in `themes/<name>/`, one self-contained folder each (`<name>.scss` + `fonts/<family>/` with the licence). A folder's contents map onto a project's `assets/`, so nothing changes inside a project: decks still say `theme: ../assets/imago.scss`, and installs see the same paths.
+
+- **App**: `bundled-themes.ts` imports from `../../../themes/…`; the `virtual:seed-fonts` plugin walks `themes/*/fonts/` and keys each font by its project path (`assets/fonts/…`); Vite's `server.fs.allow` gains `../themes`.
+- **Tests**: the seed template no longer carries theme files, so it isn't a complete project on its own. `themes/install.mjs` (plain Node ESM, no deps — importable from any package without a root workspace) builds it as one: `demoProject()` copies the template to a temp dir and installs the themes into `assets/`. core (render, golden, slide-map), cli (cli, a-Shell), vscode (unit, test-web) use it in place of the template path.
+- `themes/README.md`: the layout, who reads it, and how to add a theme. `CLAUDE.md` layout updated.
+
+A pure move: goldens are byte-identical (not re-recorded). Bundle checked to carry every font under its old `assets/fonts/…` key. core 98, app 12, cli 26, vscode 42.
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)

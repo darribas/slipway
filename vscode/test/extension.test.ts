@@ -12,10 +12,12 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { createFakeVscode } from "./fake-vscode";
+import { demoProject } from "../../themes/install.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXT_ROOT = resolve(HERE, "..");
-const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
+// The demo template with the bundled themes (themes/) installed under assets/.
+const DEMO = demoProject();
 const GOLDENS: Record<string, { sha256: string }> = JSON.parse(
   readFileSync(resolve(HERE, "../../core/test/goldens/goldens.json"), "utf8"),
 );

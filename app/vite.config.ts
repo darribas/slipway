@@ -56,40 +56,48 @@ function pandocWasmPlugin(): Plugin {
 // generated TS module — see scripts/gen-assets.mjs — so the renderer has no
 // bundler-specific imports.
 
-// Bundle the seed deck's binary font files (woff2/woff/ttf/otf under
-// src/templates/slipway-demo/assets/fonts/) into a virtual module as base64,
-// keyed by their project-relative path. seedIfEmpty() decodes these and writes
-// them into IDB so a first-run project ships with the Imago/Journal fonts in
-// place — no network fetch, works offline. The render pipeline then re-inlines
-// them as data URIs at render time (see inlineFontUrls).
+// Bundle the bundled themes' binary font files (woff2/woff/ttf/otf under
+// ../themes/<name>/fonts/) into a virtual module as base64, keyed by the
+// project-relative path each lands at — a theme folder maps onto a project's
+// assets/, so themes/imago/fonts/figtree/x.woff2 → assets/fonts/figtree/x.woff2
+// (see themes/install.mjs). seedIfEmpty() decodes these and writes them into
+// IDB so a first-run project ships with the theme fonts in place — no network
+// fetch, works offline. The render pipeline then re-inlines them as data URIs
+// at render time (see inlineFontUrls).
 function seedFontsPlugin(): Plugin {
   const VIRT_ID = "virtual:seed-fonts";
   const RESOLVED = "\0" + VIRT_ID;
-  const seedRoot = resolve("src/templates/slipway-demo");
-  const fontsDir = resolve(seedRoot, "assets/fonts");
+  const themesDir = resolve("../themes");
   const FONT_RE = /\.(woff2|woff|ttf|otf)$/i;
 
-  function collect(dir: string, out: Map<string, string>): void {
+  function collect(themeDir: string, dir: string, out: Map<string, string>): void {
     let entries: string[] = [];
     try {
       entries = readdirSync(dir);
     } catch {
-      return; // no fonts dir yet — emit an empty map
+      return; // no fonts dir — nothing to add
     }
     for (const name of entries) {
       const full = resolve(dir, name);
       if (statSync(full).isDirectory()) {
-        collect(full, out);
+        collect(themeDir, full, out);
       } else if (FONT_RE.test(name)) {
-        const rel = full.slice(seedRoot.length + 1).split("\\").join("/");
-        out.set(rel, readFileSync(full).toString("base64"));
+        const rel = full.slice(themeDir.length + 1).split("\\").join("/");
+        out.set(`assets/${rel}`, readFileSync(full).toString("base64"));
       }
+    }
+  }
+
+  function collectAll(out: Map<string, string>): void {
+    for (const name of readdirSync(themesDir).sort()) {
+      const themeDir = resolve(themesDir, name);
+      if (statSync(themeDir).isDirectory()) collect(themeDir, resolve(themeDir, "fonts"), out);
     }
   }
 
   function buildModule(): string {
     const map = new Map<string, string>();
-    collect(fontsDir, map);
+    collectAll(map);
     const obj = Object.fromEntries(map);
     return `export default ${JSON.stringify(obj)};\n`;
   }
@@ -145,7 +153,7 @@ export default defineConfig({
     // @slipway/core is a `file:../core` dependency: npm symlinks it, Vite
     // resolves the symlink to ../core/src, and the dev server refuses to
     // serve files outside the project root unless they are allow-listed.
-    fs: { allow: [".", "../core"] },
+    fs: { allow: [".", "../core", "../themes"] },
   },
   assetsInclude: ["**/*.qmd", "**/*.bib"],
 });

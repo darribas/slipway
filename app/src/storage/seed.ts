@@ -2,8 +2,9 @@
 // app has something to render the first time it's opened.
 //
 // Text files use ?raw imports (Vite inlines the source into the JS bundle so
-// the render pipeline can recompile SCSS after edits). Binary font files come
-// from the shared `bundled-themes` catalog (base64-decoded on demand).
+// the render pipeline can recompile SCSS after edits). Theme files (SCSS,
+// fonts, licences) come from the shared `bundled-themes` catalog, whose
+// sources live in the repo's top-level themes/ folder.
 //
 // Two entry points:
 //   - seedIfEmpty(): first-run only (gated on the .seeded marker). Writes the

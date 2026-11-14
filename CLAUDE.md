@@ -67,11 +67,17 @@ app/                                   the PWA (Vite project)
     storage/                           IDB-backed storage + project model
     ui/                                editor (CodeMirror 6 + vim), preview,
                                        file tree, Dockview layout
-    templates/slipway-demo/            seed deck (also core's main fixture)
+    templates/slipway-demo/            seed deck (also core's main fixture;
+                                       tests add themes/ via demoProject())
   test/app.test.ts                     storage / zip / file-tree tests + a
                                        PWA-vs-core golden check
   scripts/render-icons.mjs             one-shot icon regenerator
   public/                              icon files + manifest.webmanifest
+themes/                                bundled themes, one folder each
+  <name>/<name>.scss, <name>/fonts/    (imago, journal, travelogue); a
+                                       folder maps onto a project's assets/
+  install.mjs                          demoProject(): the demo template +
+                                       themes as a project, for tests
 cli/                                   the `slipway` command (Node)
   src/cli.ts                           args, exit codes, render flow
   src/node-fs.ts, src/root.ts          node:fs ProjectFS, project-root rules
