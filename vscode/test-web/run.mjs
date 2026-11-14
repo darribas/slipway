@@ -15,10 +15,12 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { runTests } from "@vscode/test-web";
+import { demoProject } from "../../themes/install.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXTENSION = resolve(HERE, "..");
-const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
+// The demo template with the bundled themes (themes/) installed under assets/.
+const DEMO = demoProject();
 const goldens = JSON.parse(readFileSync(resolve(HERE, "../../core/test/goldens/goldens.json"), "utf8"));
 
 // The suite runs inside the web extension host (a Web Worker): bundle it for

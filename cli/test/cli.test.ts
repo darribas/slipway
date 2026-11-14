@@ -22,11 +22,13 @@ import { afterAll, describe, expect, test } from "vitest";
 import { EXIT_OK, EXIT_RENDER_ERROR, EXIT_USAGE, main } from "../src/cli";
 import { findProjectRoot, isInside, toProjectPath } from "../src/root";
 import pkg from "../package.json";
+import { demoProject } from "../../themes/install.mjs";
 
 const run = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = resolve(HERE, "..");
-const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
+// The demo template with the bundled themes (themes/) installed under assets/.
+const DEMO = demoProject();
 const IMAGO = resolve(HERE, "../../core/test/fixtures/imago-workshop");
 const GOLDENS: Record<string, { sha256: string; bytes: number }> = JSON.parse(
   readFileSync(resolve(HERE, "../../core/test/goldens/goldens.json"), "utf8"),

@@ -24,9 +24,11 @@ import { afterAll, describe, expect, test } from "vitest";
 import { buildPrintVariant, buildRenderInputsSync, createPandocInstanceSync, renderDeck, renderDeckSync } from "../src/index";
 import { loadPandoc, pandocWasmPath } from "./helpers/pandoc";
 import { dirProjectFSSync, loadProjectInputs } from "./helpers/project";
+import { demoProject } from "../../themes/install.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEMO = resolve(HERE, "../../app/src/templates/slipway-demo");
+// The demo template with the bundled themes (themes/) installed under assets/.
+const DEMO = demoProject();
 const IMAGO = resolve(HERE, "fixtures/imago-workshop");
 const GOLDENS = resolve(HERE, "goldens/goldens.json");
 const ACTUAL_DIR = resolve(HERE, "goldens/.actual");

@@ -8,13 +8,15 @@
 // Asset bytes are decoded lazily — base64 for binaries — so importing this
 // module is cheap even if the caller only needs the catalog.
 
-import imagoScss     from "../templates/slipway-demo/assets/imago.scss?raw";
-import journalScss   from "../templates/slipway-demo/assets/journal.scss?raw";
-import oflFigtree    from "../templates/slipway-demo/assets/fonts/figtree/OFL.txt?raw";
-import licenseEtBook from "../templates/slipway-demo/assets/fonts/et-book/LICENSE.txt?raw";
-import travelogueScss  from "../templates/slipway-demo/assets/travelogue.scss?raw";
-import oflFraunces     from "../templates/slipway-demo/assets/fonts/fraunces/OFL.txt?raw";
-import oflCourierPrime from "../templates/slipway-demo/assets/fonts/courier-prime/OFL.txt?raw";
+// The sources live in the repo's top-level themes/<name>/ folders; each
+// folder's contents map onto a project's assets/ (see themes/install.mjs).
+import imagoScss       from "../../../themes/imago/imago.scss?raw";
+import oflFigtree      from "../../../themes/imago/fonts/figtree/OFL.txt?raw";
+import journalScss     from "../../../themes/journal/journal.scss?raw";
+import licenseEtBook   from "../../../themes/journal/fonts/et-book/LICENSE.txt?raw";
+import travelogueScss  from "../../../themes/travelogue/travelogue.scss?raw";
+import oflFraunces     from "../../../themes/travelogue/fonts/fraunces/OFL.txt?raw";
+import oflCourierPrime from "../../../themes/travelogue/fonts/courier-prime/OFL.txt?raw";
 import seedFonts     from "virtual:seed-fonts";
 
 export interface BundledFile {

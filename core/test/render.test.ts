@@ -32,9 +32,11 @@ import type { RenderInputs } from "../src/index";
 import { base64Encode, base64EncodePure } from "../src/host";
 import { loadPandoc } from "./helpers/pandoc";
 import { memProjectFS } from "./helpers/project";
+import { demoProject } from "../../themes/install.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEMO    = resolve(HERE, "../../app/src/templates/slipway-demo");
+// The demo template with the bundled themes (themes/) installed under assets/.
+const DEMO    = demoProject();
 const IMAGO   = resolve(HERE, "fixtures/imago-workshop");
 const FIGTREE = resolve(DEMO, "assets/fonts/figtree");
 
