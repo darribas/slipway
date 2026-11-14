@@ -24,7 +24,8 @@ $highlight: #e8c95a;   // highlighter ochre, multiplied onto the paper
 
 // ---- page layout: text keeps to a column on the left, the right is margin
 $page-left:    2.5%;   // inset from the slide's left edge
-$text-measure: 64%;    // width of the text column; the rest is right margin
+$text-measure: 75%;    // width of the text column; the rest is right margin
+$text-measure-beside-image: 58%;  // text column on slides with a {.right} image
 $column-gap:   5%;     // gap between text column and right-hand images
 
 $faded:  mix($ink, $paper, 55%);
@@ -162,11 +163,15 @@ $code-color: $ink;
 // order; it clears a one-line slide title. For long titles, or when the
 // text must not be overlapped, use the columns layout instead.
 $heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
+// on those slides the text column narrows so the image has room
+.reveal .slides section:has(> :is(figure, p) > img.right) > :is(h1, h2, h3, h4, p, ul, ol, dl, blockquote, table, .passage, .note) {
+  max-width: $text-measure-beside-image;
+}
 .reveal .slides section > :is(figure, p):has(> img.right) {
   position: absolute;
   top: 0;
   right: 0;
-  width: calc(100% - #{$page-left} - #{$text-measure} - #{$column-gap});
+  width: calc(100% - #{$page-left} - #{$text-measure-beside-image} - #{$column-gap});
   max-width: none;
   margin: 0;
 }
