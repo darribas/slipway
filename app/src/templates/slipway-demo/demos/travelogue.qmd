@@ -1,0 +1,46 @@
+---
+title: "Notes on a city"
+subtitle: "satellite embeddings, read slowly"
+author: "Your Name"
+date: "14 November 2026"
+lang: en
+format:
+  revealjs:
+    theme: ../assets/travelogue.scss
+    center: false
+    slide-number: true
+    transition: none
+    footer: "Liverpool · 2026"
+---
+
+## What we're asking
+
+- can a picture of a place tell us [about the people]{.mark} in it?
+- what does the model *see* that we [don't]{.ul}?
+- and where does it get things [wrong]{.red}?
+
+## {.unnumbered}
+
+::: {.passage}
+In the spring of the thirteenth year of Shōwa, I was invited to Taiwan. My
+hosts expected lectures; I wanted only to eat.
+
+Each morning the city announced itself first by smell, then by sound, and
+only last by sight.
+:::
+
+## A landscape, from above
+
+![fig. 1 — placeholder image, printed onto the page](../assets/images/travelogue-placeholder.jpg){width=60%}
+
+## Three things to take away
+
+1. embeddings are a lens, not a map
+2. ground truth is local
+3. read the residuals
+
+::: {.note}
+`[text]{.mark}` highlighter · `[text]{.ul}` red-pencil underline ·
+`[text]{.red}` red ink · `::: {.passage}` running text ·
+`{.full}` borderless image · `{.colour}` keep image colour
+:::
