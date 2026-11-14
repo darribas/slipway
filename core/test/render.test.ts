@@ -24,6 +24,7 @@ import {
   finalizeRender,
   inlineFontUrls,
   prepareRender,
+  relativeTo,
   rebaseChildPath,
   renderDeck,
   resolveDeclaredPath,
@@ -632,15 +633,77 @@ describe("buildRenderInputs", () => {
     expect(inputs.stylesheet).toBe("/* only */");
   });
 
-  test("collects image and font assets by basename, ignoring other files", async () => {
-    const inputs = await buildRenderInputs("deck.qmd", memProjectFS({
-      "deck.qmd": deck(""),
+  test("collects image and font assets by basename, project path and deck-relative path, ignoring other files", async () => {
+    const inputs = await buildRenderInputs("demos/deck.qmd", memProjectFS({
+      "demos/deck.qmd": deck(""),
       "assets/pic.PNG": png,
       "assets/fonts/x/face.woff2": png,
       "notes.txt": "nope",
     }));
-    expect([...inputs.assets.keys()].sort()).toEqual(["face.woff2", "pic.PNG"]);
+    expect([...inputs.assets.keys()].sort()).toEqual([
+      "../assets/fonts/x/face.woff2", "../assets/pic.PNG",
+      "assets/fonts/x/face.woff2", "assets/pic.PNG",
+      "face.woff2", "pic.PNG",
+    ]);
     expect(inputs.assets.get("pic.PNG")).toEqual(png);
+    expect(inputs.assets.get("../assets/pic.PNG")).toBe(inputs.assets.get("pic.PNG"));
+  });
+
+  test("relativeTo gives the path a deck would use to reach a project file", () => {
+    expect(relativeTo("", "assets/p.png")).toBe("assets/p.png");
+    expect(relativeTo("demos", "assets/images/p.png")).toBe("../assets/images/p.png");
+    expect(relativeTo("demos", "demos/img/p.png")).toBe("img/p.png");
+    expect(relativeTo("a/b", "a/c/p.png")).toBe("../c/p.png");
+  });
+
+  // #49: images in a sub-folder of assets/ used to stay relative links (the
+  // lookup was by basename against a path with the folder still on it).
+  describe("image inlining (#49)", () => {
+    const pngA = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x01]);
+    const pngB = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x02]);
+    const page = (md: string) => `---\ntitle: T\n---\n\n## Slide\n\n${md}\n`;
+    const uriOf = (bytes: Uint8Array) => `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`;
+    const stdinFor = async (files: Record<string, string | Uint8Array>, deckPath = "demos/deck.qmd") =>
+      prepareRender(await buildRenderInputs(deckPath, memProjectFS(files))).stdin;
+
+    test("inlines an image in a sub-folder of assets/, referenced from a deck in demos/", async () => {
+      const stdin = await stdinFor({
+        "demos/deck.qmd": page("![plate](../assets/images/plate.png)"),
+        "assets/images/plate.png": pngA,
+      });
+      expect(stdin).toContain(`![plate](${uriOf(pngA)})`);
+      expect(stdin).not.toContain("assets/images/plate.png");
+    });
+
+    test("resolves images beside the deck and deeper ../ chains", async () => {
+      const stdin = await stdinFor({
+        "talks/2026/deck.qmd": page("![a](img/a.png)\n\n![b](../../assets/b/b.png)"),
+        "talks/2026/img/a.png": pngA,
+        "assets/b/b.png": pngB,
+      }, "talks/2026/deck.qmd");
+      expect(stdin).toContain(`![a](${uriOf(pngA)})`);
+      expect(stdin).toContain(`![b](${uriOf(pngB)})`);
+    });
+
+    test("two images sharing a basename in different folders each resolve to their own file", async () => {
+      const stdin = await stdinFor({
+        "demos/deck.qmd": page("![one](../assets/a/x.png)\n\n![two](../assets/b/x.png)"),
+        "assets/a/x.png": pngA,
+        "assets/b/x.png": pngB,
+      });
+      expect(stdin).toContain(`![one](${uriOf(pngA)})`);
+      expect(stdin).toContain(`![two](${uriOf(pngB)})`);
+    });
+
+    test("forgiving references still work: bare basename, and assets/ paths written from the root", async () => {
+      const stdin = await stdinFor({
+        "demos/deck.qmd": page("![a](a.png)\n\n![b](assets/images/b.png)"),
+        "assets/images/a.png": pngA,
+        "assets/images/b.png": pngB,
+      });
+      expect(stdin).toContain(`![a](${uriOf(pngA)})`);
+      expect(stdin).toContain(`![b](${uriOf(pngB)})`);
+    });
   });
 
   test("include candidates are keyed by path and basename, excluding the deck", async () => {

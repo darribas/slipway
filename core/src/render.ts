@@ -62,14 +62,23 @@ export function prepareRender(inputs: RenderInputs): PandocJob {
   // get inlined into the compiled theme CSS. Both must become data URIs
   // because the deck renders in a null-origin sandboxed iframe where
   // relative URLs (and external CDN fetches) don't resolve.
+  // A file can sit under several keys (basename, project path, deck-relative
+  // path — see buildRenderInputs), so encode each distinct file once. Fonts
+  // are matched by basename in the CSS, so only basename keys feed fontUris.
   const assetUris = new Map<string, string>();
   const fontUris = new Map<string, string>();
+  const encoded = new Map<Uint8Array, string>();
+  const uriFor = (name: string, bytes: Uint8Array): string => {
+    let uri = encoded.get(bytes);
+    if (!uri) encoded.set(bytes, (uri = bytesToDataUri(bytes, mimeFor(name))));
+    return uri;
+  };
   for (const [name, bytes] of inputs.assets) {
     const ext = name.split(".").pop()?.toLowerCase() ?? "";
     if (IMAGE_EXTENSIONS.has(ext)) {
-      assetUris.set(name, bytesToDataUri(bytes, mimeFor(name)));
-    } else if (FONT_EXTENSIONS.has(ext)) {
-      fontUris.set(name, bytesToDataUri(bytes, mimeFor(name)));
+      assetUris.set(name, uriFor(name, bytes));
+    } else if (FONT_EXTENSIONS.has(ext) && !name.includes("/")) {
+      fontUris.set(name, uriFor(name, bytes));
     }
   }
 
