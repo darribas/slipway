@@ -988,6 +988,21 @@ Results to be recorded here when they come back.
 
 -----
 
+### Increment 35: Bundled Travelogue theme
+
+A third bundled theme, `assets/travelogue.scss`, next to Imago and Journal: sepia paper, near-black ink, a seal-red accent, typed-notes feel (after the And Other Stories cover of *Taiwan Travelogue*). Headings in Fraunces at display size; body in Courier Prime (`$body-style: "typed"`, default) or Fraunces' own text cut (`"print"`) — Newsreader was tried for "print" and dropped to keep the deck to one serif. A slide can switch alone with `## Title {.print}` / `{.typed}`.
+
+- **Page**: asymmetric, like a printed page — content in a left text column (`$text-measure`, 75%) under a top margin (`$page-top`), wide right margin. `# Section` dividers set low on the page.
+- **Images**: greyscaled and multiplied onto the paper, hairline edge, typed plate captions. `:::: {.columns}` for text-left/image-right; `{.right}` places a lone image in the margin (absolutely positioned beside the text, which narrows to `$text-measure-beside-image`); `{.wide}` spans the page; `{.colour}` / `{.full}` opt out of the treatment. Uses `:has()` (Safari 15.4+).
+- **Marking**: `[x]{.mark}` highlighter (aliased `.hlg`, so Imago decks keep theirs), `[x]{.ul}` red-pencil underline (pandoc emits `<u>`), `[x]{.red}`; `::: {.passage}` running text; `::: {.note}`.
+- **Fonts** self-hosted under `assets/fonts/{fraunces,courier-prime}/` (latin woff2 from Fontsource, OFL.txt each); no network `@import`.
+
+Registered in `BUNDLED_THEMES` (`TRAVELOGUE`), so seed, top-up and export self-heal cover it. New `BUNDLED_DEMOS` list in `seed.ts` ships `demos/travelogue-showcase.qmd` and its plate (`assets/travelogue-plate.svg` — SVG so it is a `?raw` text import and inlines as a data URI) to new *and* existing installs; kept out of the theme catalog so export self-heal never adds a demo deck. `BUNDLED_VERSION` → 2.
+
+Caught while rendering through the CLI: Slipway layers a theme over plain reveal.js, so Quarto's `$presentation-*` / `$font-family-sans-serif` variables alone left Source Sans, uppercase headings and the default title block. The theme sets base type, headings and `#title-slide` explicitly in `scss:rules`, which also holds under `quarto render`. Also: a `#`+`##` vertical stack is a wrapping `<section>`, so per-slide padding must skip `.stack` or it applies twice.
+
+Found, not fixed here (#49): images in a subfolder of `assets/` aren't inlined (the renderer keys assets by basename, the markdown rewrite matches the path after `assets/`), so they stay relative links — why the showcase plate sits directly in `assets/`. `footer:` isn't rendered by Slipway. Tests: Travelogue catalog test, a no-shared-asset-paths test across all bundled themes, new `demo-travelogue-showcase` golden (existing goldens unchanged). 98 core / 12 app / 26 cli.
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)

@@ -76,6 +76,7 @@ Body text in ET Book, with math $e^{i\\pi} + 1 = 0$.
 const DECKS: Array<{ name: string; load: () => ReturnType<typeof loadProjectInputs> }> = [
   { name: "demo-slide", load: () => loadProjectInputs(DEMO, "demos/slide.qmd") },
   { name: "demo-imago-showcase", load: () => loadProjectInputs(DEMO, "demos/imago-showcase.qmd") },
+  { name: "demo-travelogue-showcase", load: () => loadProjectInputs(DEMO, "demos/travelogue-showcase.qmd") },
   { name: "imago-workshop", load: () => loadProjectInputs(IMAGO, "slide.qmd") },
   { name: "journal-probe", load: () => loadProjectInputs(DEMO, "probe.qmd", { "probe.qmd": JOURNAL_PROBE }) },
 ];

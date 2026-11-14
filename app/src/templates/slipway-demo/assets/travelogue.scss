@@ -1,0 +1,364 @@
+/*-- scss:defaults --*/
+
+// Travelogue — sepia paper, ink-black type, typed-notes feel.
+// Inspired by the And Other Stories cover of *Taiwan Travelogue*.
+//
+// Fonts (all SIL OFL 1.1, self-hosted under fonts/ so the theme works
+// offline — no network @import; see fonts/<family>/OFL.txt):
+//   Fraunces      headings, .passage, and body in the "print" style
+//                 (variable: opsz, wght, SOFT, WONK — body uses its text cut)
+//   Courier Prime body, "typed" style
+//
+// Switch body style with $body-style below. The fonts/ paths resolve
+// relative to this stylesheet under `quarto render` too.
+
+
+// ---- body style: "typed" (Courier Prime) or "print" (Fraunces, text cut)
+$body-style: "typed" !default;
+
+// ---- palette (change these to retune the whole deck)
+$paper:     #f1e7d3;   // light sepia
+$ink:       #16130f;   // near-black; set to #000 for full black
+$accent:    #b23a26;   // seal red: links, red-pencil underlines
+$highlight: #e8c95a;   // highlighter ochre, multiplied onto the paper
+
+// ---- page layout: text keeps to a column on the left, the right is margin
+$page-top:     52px;   // space above the first line (slide is 960×700)
+$page-left:    2.5%;   // inset from the slide's left edge
+$text-measure: 75%;    // width of the text column; the rest is right margin
+$text-measure-beside-image: 58%;  // text column on slides with a {.right} image
+$column-gap:   5%;     // gap between text column and right-hand images
+
+$faded:  mix($ink, $paper, 55%);
+$rule:   mix($ink, $paper, 30%);
+
+// ---- fonts
+$typed-font: "Courier Prime", "Courier New", monospace;
+$print-font: "Fraunces", Georgia, serif;
+$font-family-sans-serif: $typed-font;
+$presentation-font-size-root: 34px;
+@if $body-style == "print" {
+  $font-family-sans-serif: $print-font;
+  $presentation-font-size-root: 36px;
+}
+$presentation-heading-font: "Fraunces", Georgia, serif;
+$font-family-monospace: "Courier Prime", monospace;
+
+// ---- reveal / quarto variables
+$body-bg: $paper;
+$body-color: $ink;
+$link-color: $accent;
+$selection-bg: $ink;
+$selection-color: $paper;
+
+$presentation-line-height: 1.5;
+$presentation-heading-color: $ink;
+$presentation-heading-font-weight: 400;
+$presentation-heading-line-height: 1.1;
+$presentation-heading-letter-spacing: -0.01em;
+$presentation-heading-text-transform: none;
+$presentation-h1-font-size: 2.6em;
+$presentation-h2-font-size: 1.7em;
+$presentation-h3-font-size: 1.2em;
+$presentation-block-margin: 0.9em;
+
+$code-block-bg: transparent;
+$code-color: $ink;
+
+
+/*-- scss:rules --*/
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/fraunces/fraunces-latin-full-normal.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; }
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/fraunces/fraunces-latin-full-italic.woff2") format("woff2");
+  font-weight: 100 900; font-style: italic; }
+@font-face {
+  font-family: "Courier Prime";
+  src: url("fonts/courier-prime/courier-prime-latin-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; }
+@font-face {
+  font-family: "Courier Prime";
+  src: url("fonts/courier-prime/courier-prime-latin-400-italic.woff2") format("woff2");
+  font-weight: 400; font-style: italic; }
+@font-face {
+  font-family: "Courier Prime";
+  src: url("fonts/courier-prime/courier-prime-latin-700-normal.woff2") format("woff2");
+  font-weight: 700; font-style: normal; }
+@font-face {
+  font-family: "Courier Prime";
+  src: url("fonts/courier-prime/courier-prime-latin-700-italic.woff2") format("woff2");
+  font-weight: 700; font-style: italic; }
+
+// ---- base type. Set explicitly (not only via the Quarto variables above)
+// so the theme renders the same under Slipway, which layers it over plain
+// reveal.js, and under `quarto render`.
+.reveal {
+  font-family: $font-family-sans-serif;
+  font-size: $presentation-font-size-root;
+  font-weight: 400;
+  line-height: $presentation-line-height;
+  color: $ink;
+}
+.reveal .slides section, .reveal .slides section > * { line-height: $presentation-line-height; }
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  font-family: $presentation-heading-font;
+  font-weight: 400;
+  color: $ink;
+  text-transform: none;
+  text-shadow: none;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.reveal h1 { font-size: 2.6em; }
+.reveal h2 { font-size: 1.7em; }
+.reveal h3 { font-size: 1.2em; }
+.reveal h2:empty, .reveal h1:empty { display: none; }
+.reveal code, .reveal pre { font-family: $font-family-monospace; }
+
+// subtle paper grain
+.reveal-viewport {
+  background-color: $paper;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.27  0 0 0 0 0.16  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+// left-aligned, ragged right, top-anchored
+.reveal .slides { text-align: left; }
+.reveal .slides section { text-align: left; }
+.reveal p, .reveal li { hyphens: none; }
+
+// headings: Fraunces display cut, a little wonky
+.reveal h1, .reveal h2, .reveal h3 {
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+  text-align: left;
+}
+.reveal h2 {
+  padding-bottom: 0.35em;
+  margin-bottom: 1em;
+  border-bottom: 1px solid $rule;
+}
+
+// ---- asymmetric page: everything set in a left-hand text column, leaving
+// a wide right margin. Images can step out into it (see below).
+.reveal .slides section {
+  padding-top: $page-top;
+  padding-left: $page-left;
+  box-sizing: border-box;
+}
+// a vertical stack (`#` + `##` slides) is only a wrapper: don't pad it twice
+.reveal .slides section.stack { padding: 0; }
+.reveal .slides section > :is(h1, h2, h3, h4, p, ul, ol, dl, blockquote, table, figure, .passage, .note, .quarto-figure),
+.reveal #title-slide > * {
+  max-width: $text-measure;
+}
+
+// two columns: text left, image right — the column widths win over the
+// measure. :::: {.columns} / ::: {.column width="55%"} as in Quarto.
+.reveal .columns {
+  gap: $column-gap;
+  align-items: flex-start;
+}
+.reveal .column > :is(p, ul, ol) { max-width: none; }
+.reveal .column img { max-width: 100%; }
+
+// a lone image placed in the right margin, top-aligned with the text:
+// ![cap](x.jpg){.right}. width= on the image is relative to the margin.
+// Positioned absolutely so it sits beside the text whatever the source
+// order; it clears a one-line slide title. For long titles, or when the
+// text must not be overlapped, use the columns layout instead.
+$heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
+// on those slides the text column narrows so the image has room
+.reveal .slides section:has(> :is(figure, p) > img.right) > :is(h1, h2, h3, h4, p, ul, ol, dl, blockquote, table, .passage, .note) {
+  max-width: $text-measure-beside-image;
+}
+.reveal .slides section > :is(figure, p):has(> img.right) {
+  position: absolute;
+  top: $page-top;
+  right: 0;
+  width: calc(100% - #{$page-left} - #{$text-measure-beside-image} - #{$column-gap});
+  max-width: none;
+  margin: 0;
+}
+.reveal .slides section:has(> h2:not(:empty)) > :is(figure, p):has(> img.right) {
+  top: calc(#{$page-top} + #{$heading-block});
+}
+.reveal img.right { max-width: 100%; margin: 0; }
+// an image spanning the whole page: ![cap](x.jpg){.wide}
+.reveal .slides section > figure:has(> img.wide),
+.reveal .slides section > p:has(> img.wide) { max-width: none; }
+
+// lists as typed notes: en-dashes, no bullets
+.reveal ul { list-style: none; margin-left: 0; }
+.reveal ul > li { position: relative; padding-left: 1.4em; margin-bottom: 0.35em; }
+.reveal ul > li::before { content: "–"; position: absolute; left: 0; color: $faded; }
+
+// "print": Fraunces at its text optical size — sturdier, lower contrast,
+// no wonky forms — so headings (opsz 144, WONK 1) still stand apart.
+// The deck-wide default comes from $body-style; a single slide can switch
+// with `## Title {.print}` or `## Title {.typed}`.
+@mixin print-body {
+  font-family: $print-font;
+  @if $body-style != "print" { font-size: 106%; }   // print body sets a touch larger
+  @each $sel in (p, li, figcaption, ".caption", ".note", ".subtitle", ".author", ".date") {
+    #{$sel} {
+      font-family: $print-font;
+      font-variation-settings: "opsz" 14, "SOFT" 0, "WONK" 0;
+    }
+  }
+}
+@mixin typed-body {
+  font-family: $typed-font;
+  @if $body-style == "print" { font-size: 94%; }
+  @each $sel in (p, li, figcaption, ".caption", ".note", ".subtitle", ".author", ".date") {
+    #{$sel} { font-family: $typed-font; font-variation-settings: normal; }
+  }
+}
+@if $body-style == "print" {
+  .reveal .slides { @include print-body; }
+}
+.reveal .slides section.print { @include print-body; }
+.reveal .slides section.typed { @include typed-body; }
+
+// ---- highlights
+// [text]{.mark} or <mark>: a highlighter swipe across the lower part of the line.
+// .hlg is an alias, so decks written for imago.scss keep their highlights.
+.reveal mark, .reveal .mark, .reveal .hlg {
+  color: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 0.2em,
+    rgba($highlight, 0.85) 0.3em,
+    rgba($highlight, 0.7) 95%,
+    transparent 100%
+  ) no-repeat 0 85% / 100% 62%;
+  mix-blend-mode: multiply;
+  padding: 0 0.15em;
+  margin: 0 -0.05em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+// [text]{.ul} (pandoc turns it into <u>): red-pencil underline
+.reveal u, .reveal .ul {
+  text-decoration: underline;
+  text-decoration-color: $accent;
+  text-decoration-thickness: 0.09em;
+  text-underline-offset: 0.18em;
+}
+// [text]{.red}: plain seal-red ink
+.reveal .red { color: $accent; }
+
+.reveal em { font-style: italic; }
+.reveal strong { font-weight: 700; }
+.reveal a { text-decoration: underline; text-underline-offset: 0.15em; text-decoration-thickness: 1px; }
+
+// ---- title slide: like a typed title page
+// (pandoc/Slipway markup: #title-slide > h1.title, p.subtitle/.author/.date)
+.reveal #title-slide { padding-top: 190px; }
+.reveal #title-slide .title {
+  font-size: 2.8em;
+  margin-bottom: 0.15em;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+}
+.reveal #title-slide .subtitle {
+  font-family: $font-family-sans-serif;
+  font-size: 0.85em;
+  color: $faded;
+  margin: 0 0 1.6em;
+}
+.reveal #title-slide .author,
+.reveal #title-slide .date {
+  font-size: 0.7em;
+  color: $faded;
+  margin: 0;
+}
+// section divider slides (`# Heading`): set low on the page, like a part title
+.reveal .slides section.title-slide.level1:not(#title-slide) { padding-top: 260px; }
+.reveal .slides section.title-slide.level1:not(#title-slide) h1 {
+  font-size: 2.2em;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+}
+// (Quarto markup)
+.reveal .quarto-title-block { text-align: left; }
+.reveal .quarto-title-block .title {
+  font-size: 2.8em;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+}
+.reveal .quarto-title-block .subtitle {
+  font-family: $font-family-sans-serif;
+  font-size: 0.85em;
+  color: $faded;
+  margin-top: 0.6em;
+}
+.reveal .quarto-title-block .quarto-title-authors,
+.reveal .quarto-title-block .date {
+  font-size: 0.7em;
+  color: $faded;
+  text-align: left;
+}
+.reveal .quarto-title-authors { justify-content: flex-start; }
+
+// ---- images, printed onto the paper
+.reveal img {
+  filter: grayscale(1) contrast(1.08) sepia(0.25);
+  mix-blend-mode: multiply;
+  border: 1px solid $rule;
+}
+.reveal img.full { border: none; }        // ![](x.jpg){.full}
+.reveal img.colour, .reveal img.color {   // ![](x.jpg){.colour} to keep colour
+  filter: contrast(1.02) saturate(0.85);
+}
+
+// captions as plate captions
+.reveal .quarto-figure figcaption,
+.reveal figcaption,
+.reveal .caption {
+  font-family: $font-family-sans-serif;
+  font-size: 0.5em;
+  color: $faded;
+  text-align: left;
+  margin-top: 0.6em;
+  letter-spacing: 0.02em;
+}
+.reveal .quarto-figure-center > figure > p,
+.reveal .quarto-figure-center > figure > figcaption { text-align: left; }
+
+// ---- a block of running text, like the cover passage
+// ::: {.passage} ... :::
+.reveal .passage {
+  font-family: "Fraunces", Georgia, serif;
+  font-variation-settings: "opsz" 24, "SOFT" 0, "WONK" 0;
+  font-size: 1.15em;
+  line-height: 1.45;
+  text-align: justify;
+  hyphens: auto;
+}
+.reveal .passage p + p { text-indent: 1.5em; margin-top: 0; }
+
+// marginal note
+.reveal .note {
+  font-size: 0.55em;
+  color: $faded;
+}
+
+// ---- chrome: folio-style slide numbers, quiet controls
+.reveal .slide-number {
+  font-family: $font-family-sans-serif;
+  background: transparent;
+  color: $faded;
+  font-size: 16px;
+  right: 2.2em;
+  bottom: 1.2em;
+}
+.reveal .controls { color: $faded; }
+.reveal .progress { color: $ink; height: 2px; }
+
+.reveal .footer {
+  font-family: $font-family-sans-serif;
+  font-size: 0.4em;
+  color: $faded;
+  text-align: left;
+  left: 2.2em;
+}
