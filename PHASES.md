@@ -966,11 +966,15 @@ After merging: re-download the three files from the a-Shell README (curl -L save
 
 The first real run (Dani, after 4.6a published the files) printed only `jsc: Error in file ./bin/slipway-ashell.js : JavaScript execution returned a result of an unsupported type`. No version line came out.
 
-a-Shell's `executeJavascript` (`SceneDelegate.swift`) does nothing with `console`: it prints the completion value of `evaluateJavaScript`, and only if that value is a string or a number. Our bundle ended in an IIFE whose value is `undefined`, which WKWebView reports as an unsupported result type. Everything the adapter wrote with `console.log` / `console.error` was lost. The 4.2 spikes behaved the same way, but they also saved report files, and their results came from those, so this went unnoticed. The `node:vm` stand-in in `ashell.test.ts` captured `console` and ignored the completion value, so it tested the wrong channel.
+a-Shell's `executeJavascript` (`SceneDelegate.swift`) prints the completion value of `evaluateJavaScript`, and only if that value is a string or a number. Our bundle ended in an IIFE whose value is `undefined`, which WKWebView reports as an unsupported result type. Everything the adapter wrote with `console.log` / `console.error` was lost. The 4.2 spikes behaved the same way, but they also saved report files, and their results came from those, so this went unnoticed. The `node:vm` stand-in in `ashell.test.ts` captured `console` and ignored the completion value, so it tested the wrong channel.
 
 - `main.ts` collects every line it prints. An esbuild `footer` makes the bundle's last statement evaluate to that text and removes the temporary global it passed through.
 - `ashell.test.ts` now requires every run's completion value to be a string, as a-Shell does, and checks the printed text for `--version`, a usage error and a render.
 - README: output appears when a run ends. The first render (loading pandoc) is silent until it finishes.
+
+### Increment 4.3c: each line printed once
+
+With 4.3b on the device, `--version` worked but printed the version twice. The 4.3b reading was wrong on one point: a-Shell's page does show `console` output, at least for `console.log`. The second copy came from the completion value. (Why the first run showed no console line is not known. It may be lost when evaluation ends in an error.) The adapter now prints only through the completion value, the channel `executeJavascript` documents, and never calls `console`. The `node:vm` harness fails any run that touches `console`, so a duplicate can't come back unnoticed, and its assertions now read the printed text instead of a separate stdout and stderr.
 
 ### Increment 4.7: Manual iPad acceptance — pending (Dani)
 

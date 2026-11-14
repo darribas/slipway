@@ -17,12 +17,12 @@
 //     window pays for reading and compiling the 58 MB module;
 //   - a script cannot set the command's exit status. Errors are printed;
 //     the status is always 0;
-//   - `jsc` prints nothing the script writes to `console`: it prints only
-//     the script's completion value, and only if that is a string or a
-//     number (anything else, `undefined` included, is reported as "returned
-//     a result of an unsupported type"). So every line is collected here and
-//     the build's footer makes the collected text the bundle's last value.
-//     It appears when the run ends, not as it happens.
+//   - `jsc` prints the script's completion value, and only if that is a
+//     string or a number (anything else, `undefined` included, is reported
+//     as "returned a result of an unsupported type"). So every line is
+//     collected here and the build's footer makes the collected text the
+//     bundle's last value; it appears when the run ends. Nothing goes to
+//     `console`: a-Shell shows that too, and each line came out twice (4.3c).
 
 import {
   buildPrintVariant,
@@ -52,10 +52,8 @@ declare function prompt(message: string): string | null;
 
 /** Everything this run prints, in order; handed to a-Shell at the end (see the footer in scripts/build.mjs). */
 const printed: string[] = [];
-// The console calls reach nothing in a-Shell; they are kept for other hosts
-// (and the tests, which tell stdout from stderr through them).
-const out = (line: string) => (printed.push(line), console.log(line));
-const err = (line: string) => (printed.push(line), console.error(line + "\n"));
+const out = (line: string) => void printed.push(line);
+const err = out;
 
 const env: Record<string, string | undefined> =
   typeof process !== "undefined" && process.env ? (process.env as Record<string, string | undefined>) : {};
