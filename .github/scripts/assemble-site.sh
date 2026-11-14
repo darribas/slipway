@@ -20,6 +20,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-$ROOT/_site}"
+# Absolute, so steps that cd elsewhere (npm pack in cli/) still write here.
+# A relative path is taken relative to the caller's cwd, as usual.
+mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"
 
 for required in app/dist/index.html vscode/dist/extension.js vscode/dist/pandoc.wasm cli/dist/slipway.mjs cli/dist/slipway-ashell.js cli/dist/pandoc.wasm; do
   [ -f "$ROOT/$required" ] || { echo "assemble-site: missing $required — build that package first" >&2; exit 1; }

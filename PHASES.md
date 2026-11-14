@@ -951,6 +951,17 @@ The script refuses to run if a package isn't built or if `app/dist` ever grows a
 - The deploy and release workflows only run on `main` / on tags, so they have not executed. The assembly script they call was run locally; `release.yml`'s packaging commands were run locally; the workflow YAML itself is unexercised until the first merge and the first tag.
 - **CORS check (`curl -I` on the extension URL)** — the issue asks for it once. It can only be done after the first deploy to Pages, and this sandbox's network policy blocks `darribas.github.io` anyway. GitHub Pages sends `access-control-allow-origin: *` on every response, which is what VS Code for the Web needs; to confirm after merging: `curl -sI https://darribas.github.io/slipway/vscode/package.json | grep -i access-control`. It is on the 4.7 checklist.
 
+### Increment 4.6a: the first deploy after #41 failed — `assemble-site.sh` with a relative output dir
+
+Found by Dani in a-Shell: `jsc ~/Documents/bin/slipway-ashell.js --version` gave `SyntaxError: Unexpected token '<'`. Nothing was wrong with the script: `/slipway/cli/` had never been published, so `curl -L -O` saved GitHub's 404 page under the script's name.
+
+The merge's Deploy run (#40) failed at "Assemble the site". `deploy.yml` calls `assemble-site.sh _site` (relative), and the script runs `npm pack --pack-destination "$OUT/cli"` from inside `cli/`, so npm looked for `cli/_site/cli/`. Run locally in 4.6 it had used the absolute default and passed. Pages kept serving the previous deploy (#39), which has no `/cli/` or `/vscode/`.
+
+- `assemble-site.sh` makes `$OUT` absolute (relative to the caller's cwd) before anything `cd`s.
+- `ci.yml` gains a `site` job that builds app/CLI/extension and runs the script exactly as `deploy.yml` does, then checks every permanent path exists, so this fails the PR rather than the deploy.
+
+After merging: re-download the three files from the a-Shell README (curl -L saves an error page silently; `head -c 40 ~/Documents/bin/slipway-ashell.js` should show `"use strict"`).
+
 ### Increment 4.7: Manual iPad acceptance — pending (Dani)
 
 Not run yet; it needs things an agent can't do and that don't exist until this branch is merged.

@@ -140,3 +140,38 @@ jobs:
       - name: Test in VS Code for the Web (@vscode/test-web)
         run: npm test
         working-directory: vscode/test-web
+
+  # The Pages layout, assembled exactly as deploy.yml does it (same relative
+  # `_site` argument), so a broken assemble-site.sh fails the PR rather than
+  # the deploy after merge (4.3b: it once wrote the CLI tarball under
+  # cli/_site/ and nothing was published). Builds only; the jobs above test.
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            app/package-lock.json
+            cli/package-lock.json
+            vscode/package-lock.json
+
+      - name: Install dependencies
+        run: for p in core app cli vscode; do (cd "$p" && npm ci); done
+
+      - name: Build app, CLI, extension
+        run: for p in app cli vscode; do (cd "$p" && npm run build); done
+
+      - name: Assemble the site
+        run: .github/scripts/assemble-site.sh _site
+
+      - name: Check the permanent addresses are there
+        run: |
+          for f in index.html vscode/package.json vscode/dist/extension.js vscode/dist/pandoc.wasm \
+                   cli/index.html cli/README.md cli/slipway-ashell.js cli/pandoc.wasm cli/slipway-cli-*.tgz; do
+            ls _site/$f >/dev/null || { echo "missing _site/$f"; exit 1; }
+          done
