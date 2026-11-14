@@ -25,6 +25,9 @@ Fonts are self-hosted so themes render offline — no network `@import`.
   imports of the SCSS and licences) and the `virtual:seed-fonts` plugin in
   `app/vite.config.ts` (every font under `themes/*/fonts/`). Seed, top-up and
   export self-heal all go through that catalog.
+- **`cli/new-deck.sh`** fetches a theme's files into a new deck folder
+  (a-Shell or any shell); its per-theme file lists are checked against these
+  folders by `cli/test/new-deck.test.ts`.
 - **Tests** in every package build the demo template as a complete project
   with `demoProject()` from `install.mjs` (template + themes in `assets/`).
 
@@ -37,3 +40,5 @@ Fonts are self-hosted so themes render offline — no network `@import`.
    `BUNDLED_VERSION` in `app/src/storage/seed.ts` so existing installs get it.
 3. A showcase deck under the demo template's `demos/` and a golden in
    `core/test/golden.test.ts`.
+4. A `case` branch in `cli/new-deck.sh` listing its font files (and its
+   showcase). `cli/test/new-deck.test.ts` fails until the lists match.

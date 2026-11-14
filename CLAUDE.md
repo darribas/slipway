@@ -85,6 +85,8 @@ cli/                                   the `slipway` command (Node)
   src/args.ts                          usage text + arg parsing (shared)
   src/ashell/                          the a-Shell adapter: one IIFE script
                                        for `jsc` → dist/slipway-ashell.js
+  new-deck.sh                          POSIX sh: new deck folder with a
+                                       bundled theme (published at /cli/)
   scripts/build.mjs                    esbuild → dist/slipway.mjs, copies
                                        pandoc.wasm next to it
   test/cli.test.ts                     in-process + built-artifact tests

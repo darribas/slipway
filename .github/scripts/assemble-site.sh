@@ -8,7 +8,8 @@
 #     cli/       slipway-cli-<version>.tgz (+ index.html listing it), and for
 #                a-Shell on iPad: slipway-ashell.js + pandoc.wasm, and
 #                README.md (from cli/README-ashell.md: install / update /
-#                uninstall, kept plain so it reads well with `cat`)
+#                uninstall, kept plain so it reads well with `cat`), plus
+#                new-deck.sh (starts a deck folder with a bundled theme)
 #
 # The two sub-paths are permanent addresses: VS Code for the Web re-fetches
 # the extension from /vscode/ on every launch, so moving it uninstalls it for
@@ -55,6 +56,7 @@ VERSION="$(node -p "require('$ROOT/cli/package.json').version")"
 # 4. The a-Shell adapter: the script and the wasm it loads from beside itself.
 cp "$ROOT/cli/dist/slipway-ashell.js" "$ROOT/cli/dist/pandoc.wasm" "$OUT/cli/"
 cp "$ROOT/cli/README-ashell.md" "$OUT/cli/README.md"
+cp "$ROOT/cli/new-deck.sh" "$OUT/cli/"
 
 cat > "$OUT/cli/index.html" <<HTML
 <!doctype html>
@@ -71,7 +73,11 @@ Documentation: <a href="https://github.com/darribas/slipway/tree/main/cli#readme
 <pre>mkdir -p ~/Documents/bin &amp;&amp; cd ~/Documents/bin
 curl -L -O https://darribas.github.io/slipway/cli/slipway-ashell.js
 curl -L -O https://darribas.github.io/slipway/cli/pandoc.wasm</pre>
-<p>Then <code>jsc ~/Documents/bin/slipway-ashell.js render deck.qmd</code>. The second download is 56 MB.
+<p>Then <code>jsc ~/Documents/bin/slipway-ashell.js render deck.qmd</code>. The second download is 56 MB.</p>
+<p>To start a new deck folder with a bundled theme (Travelogue, Imago or Journal), its fonts and a showcase deck:</p>
+<pre>curl -L -O https://darribas.github.io/slipway/cli/new-deck.sh
+sh new-deck.sh mytalk travelogue</pre>
+<p>
 Full instructions — install, a short <code>slipway</code> alias, update, uninstall — are in
 <a href="README.md">README.md</a>, which you can also fetch from a-Shell:
 <code>curl -L https://darribas.github.io/slipway/cli/README.md</code>.</p>

@@ -172,6 +172,6 @@ jobs:
       - name: Check the permanent addresses are there
         run: |
           for f in index.html vscode/package.json vscode/dist/extension.js vscode/dist/pandoc.wasm \
-                   cli/index.html cli/README.md cli/slipway-ashell.js cli/pandoc.wasm cli/slipway-cli-*.tgz; do
+                   cli/index.html cli/README.md cli/new-deck.sh cli/slipway-ashell.js cli/pandoc.wasm cli/slipway-cli-*.tgz; do
             ls _site/$f >/dev/null || { echo "missing _site/$f"; exit 1; }
           done
