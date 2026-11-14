@@ -49,6 +49,10 @@ await build({
   target: "safari15",
   minify: true,
   legalComments: "none",
+  // a-Shell's jsc prints only the script's completion value (a string), so the
+  // last statement evaluates to what the run printed; main.ts leaves it on
+  // globalThis because an IIFE's body cannot be the program's last value.
+  footer: { js: ';(()=>{const t=globalThis.__slipwayPrinted;delete globalThis.__slipwayPrinted;return typeof t=="string"?t:""})();' },
   logLevel: "warning",
 });
 

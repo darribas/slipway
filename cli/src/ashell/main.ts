@@ -15,8 +15,14 @@
 //   - … and whatever is stored on globalThis survives until `jsc --reset`:
 //     the instantiated pandoc is kept there, so only the first render in a
 //     window pays for reading and compiling the 58 MB module;
-//   - a script cannot set the command's exit status. Errors are printed to
-//     stderr; the status is always 0.
+//   - a script cannot set the command's exit status. Errors are printed;
+//     the status is always 0;
+//   - `jsc` prints nothing the script writes to `console`: it prints only
+//     the script's completion value, and only if that is a string or a
+//     number (anything else, `undefined` included, is reported as "returned
+//     a result of an unsupported type"). So every line is collected here and
+//     the build's footer makes the collected text the bundle's last value.
+//     It appears when the run ends, not as it happens.
 
 import {
   buildPrintVariant,
@@ -44,8 +50,12 @@ declare const jsc: {
 };
 declare function prompt(message: string): string | null;
 
-const out = (line: string) => console.log(line);
-const err = (line: string) => console.error(line + "\n");
+/** Everything this run prints, in order; handed to a-Shell at the end (see the footer in scripts/build.mjs). */
+const printed: string[] = [];
+// The console calls reach nothing in a-Shell; they are kept for other hosts
+// (and the tests, which tell stdout from stderr through them).
+const out = (line: string) => (printed.push(line), console.log(line));
+const err = (line: string) => (printed.push(line), console.error(line + "\n"));
 
 const env: Record<string, string | undefined> =
   typeof process !== "undefined" && process.env ? (process.env as Record<string, string | undefined>) : {};
@@ -194,3 +204,4 @@ function main(argv: string[]): void {
 
 // process.argv is ["jsc", "<this script>", …arguments].
 main(typeof process !== "undefined" && process.argv ? process.argv.slice(2) : []);
+(globalThis as Record<string, unknown>).__slipwayPrinted = printed.join("\n");

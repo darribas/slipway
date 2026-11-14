@@ -75,7 +75,9 @@ folder (`slipway render slides/deck.qmd`) or pass `--root ..`.
 
 - **The first render in a window is slow; the rest are fast.** The first one
   loads and compiles `pandoc.wasm`, which then stays loaded in that window
-  (later renders take well under a second). Opening a new window, or
+  (later renders take well under a second). Nothing is printed until a run
+  has finished, so the first render sits silent for a while: that is
+  normal. Opening a new window, or
   `jsc --reset`, starts over.
 - **`jsc --reset` frees the memory** pandoc holds, and also gets `jsc` going
   again if a render ever hangs.
