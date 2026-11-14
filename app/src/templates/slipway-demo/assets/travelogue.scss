@@ -22,6 +22,11 @@ $ink:       #16130f;   // near-black; set to #000 for full black
 $accent:    #b23a26;   // seal red: links, red-pencil underlines
 $highlight: #e8c95a;   // highlighter ochre, multiplied onto the paper
 
+// ---- page layout: text keeps to a column on the left, the right is margin
+$page-left:    2.5%;   // inset from the slide's left edge
+$text-measure: 64%;    // width of the text column; the rest is right margin
+$column-gap:   5%;     // gap between text column and right-hand images
+
 $faded:  mix($ink, $paper, 55%);
 $rule:   mix($ink, $paper, 30%);
 
@@ -133,6 +138,45 @@ $code-color: $ink;
   margin-bottom: 1em;
   border-bottom: 1px solid $rule;
 }
+
+// ---- asymmetric page: everything set in a left-hand text column, leaving
+// a wide right margin. Images can step out into it (see below).
+.reveal .slides section { padding-left: $page-left; box-sizing: border-box; }
+.reveal .slides section > :is(h1, h2, h3, h4, p, ul, ol, dl, blockquote, table, figure, .passage, .note, .quarto-figure),
+.reveal #title-slide > * {
+  max-width: $text-measure;
+}
+
+// two columns: text left, image right — the column widths win over the
+// measure. :::: {.columns} / ::: {.column width="55%"} as in Quarto.
+.reveal .columns {
+  gap: $column-gap;
+  align-items: flex-start;
+}
+.reveal .column > :is(p, ul, ol) { max-width: none; }
+.reveal .column img { max-width: 100%; }
+
+// a lone image placed in the right margin, top-aligned with the text:
+// ![cap](x.jpg){.right}. width= on the image is relative to the margin.
+// Positioned absolutely so it sits beside the text whatever the source
+// order; it clears a one-line slide title. For long titles, or when the
+// text must not be overlapped, use the columns layout instead.
+$heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
+.reveal .slides section > :is(figure, p):has(> img.right) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: calc(100% - #{$page-left} - #{$text-measure} - #{$column-gap});
+  max-width: none;
+  margin: 0;
+}
+.reveal .slides section:has(> h2:not(:empty)) > :is(figure, p):has(> img.right) {
+  top: $heading-block;
+}
+.reveal img.right { max-width: 100%; margin: 0; }
+// an image spanning the whole page: ![cap](x.jpg){.wide}
+.reveal .slides section > figure:has(> img.wide),
+.reveal .slides section > p:has(> img.wide) { max-width: none; }
 
 // lists as typed notes: en-dashes, no bullets
 .reveal ul { list-style: none; margin-left: 0; }
@@ -253,7 +297,6 @@ $code-color: $ink;
   font-variation-settings: "opsz" 24, "SOFT" 0, "WONK" 0;
   font-size: 1.15em;
   line-height: 1.45;
-  max-width: 30em;
   text-align: justify;
   hyphens: auto;
 }

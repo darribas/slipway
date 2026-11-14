@@ -31,7 +31,23 @@ only last by sight.
 
 ## A landscape, from above
 
-![fig. 1 — placeholder image, printed onto the page](../assets/images/travelogue-placeholder.jpg){width=60%}
+:::: {.columns}
+::: {.column width="45%"}
+Text keeps to the left of the page.
+
+The image sits to its right, like a plate.
+:::
+::: {.column width="55%"}
+![fig. 1 — placeholder image, printed onto the page](../assets/images/travelogue-placeholder.jpg)
+:::
+::::
+
+## An image in the margin
+
+Short notes stay in the text column; a single image can step out into the
+right-hand margin with `{.right}`.
+
+![fig. 2 — the same view, in the margin](../assets/images/travelogue-placeholder.jpg){.right}
 
 ## Three things to take away
 
@@ -42,5 +58,7 @@ only last by sight.
 ::: {.note}
 `[text]{.mark}` highlighter · `[text]{.ul}` red-pencil underline ·
 `[text]{.red}` red ink · `::: {.passage}` running text ·
-`{.full}` borderless image · `{.colour}` keep image colour
+`{.right}` image in the right margin · `{.wide}` full-width image ·
+`{.full}` borderless image · `{.colour}` keep image colour ·
+`:::: {.columns}` text left, image right
 :::
