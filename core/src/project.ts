@@ -12,8 +12,9 @@ export interface ProjectFS {
   /**
    * Every file in the project, as POSIX paths relative to the project root.
    * The order matters when a deck declares no theme / bibliography (the
-   * first .scss / .css / .bib wins) and when two assets share a basename
-   * (the last one wins), so implementations should return a sorted list.
+   * first .scss / .css / .bib wins) and when an image is referenced by a
+   * basename two files share (the last one wins), so implementations should
+   * return a sorted list.
    */
   listFiles(): Promise<string[]>;
   readText(path: string): Promise<string>;
@@ -28,6 +29,20 @@ const BINARY_ASSET_EXTENSIONS = new Set([
 ]);
 const INCLUDE_EXTENSIONS = new Set(["qmd", "md", "markdown"]);
 
+function dirOf(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.slice(0, i);
+}
+
+/** POSIX path of project file `to`, relative to project folder `fromDir` ("" = root). */
+export function relativeTo(fromDir: string, to: string): string {
+  const from = fromDir ? fromDir.split("/") : [];
+  const target = to.split("/");
+  let common = 0;
+  while (common < from.length && common < target.length - 1 && from[common] === target[common]) common++;
+  return [...Array(from.length - common).fill(".."), ...target.slice(common)].join("/");
+}
+
 function extOf(path: string): string {
   return path.split(".").pop()?.toLowerCase() ?? "";
 }
@@ -41,6 +56,8 @@ export interface ProjectFSSync {
 
 /** Which project files a deck needs — the resolution rules, with no I/O. */
 interface RenderPlan {
+  /** The deck's own project path; images may be referenced relative to it. */
+  qmdPath: string;
   themePath: string | null;
   bibPath: string | null;
   /** Binary assets (images, fonts), in list order. */
@@ -68,6 +85,7 @@ function planRenderInputs(qmdPath: string, qmd: string, all: string[]): RenderPl
   if (!bibPath) bibPath = pickFirst(all, (p) => p.toLowerCase().endsWith(".bib"));
 
   return {
+    qmdPath,
     themePath,
     bibPath,
     assetPaths: all.filter((p) => BINARY_ASSET_EXTENSIONS.has(extOf(p))),
@@ -84,10 +102,20 @@ function assemble(
   assetBytes: Uint8Array[],
   includeTexts: string[],
 ): RenderInputs {
-  // Both asset kinds are keyed by basename to match the renderer's lookup
-  // (a later file with the same basename replaces an earlier one).
+  // Each asset is reachable under three keys, set from least to most specific
+  // so the precise ones win when two keys coincide:
+  //   1. its basename — the forgiving lookup decks and themes have always
+  //      relied on (`plate.jpg`; font url()s match by basename too). When two
+  //      files share a basename the later one wins this key.
+  //   2. its project path (`assets/images/plate.jpg`).
+  //   3. its path relative to the deck (`../assets/images/plate.jpg` from
+  //      demos/), so an image reference resolves exactly as a browser or
+  //      `quarto render` would resolve it.
+  // The same bytes back every key; the renderer encodes each file once.
   const assets = new Map<string, Uint8Array>();
   plan.assetPaths.forEach((p, i) => assets.set(p.split("/").pop()!, assetBytes[i]));
+  plan.assetPaths.forEach((p, i) => assets.set(p, assetBytes[i]));
+  plan.assetPaths.forEach((p, i) => assets.set(relativeTo(dirOf(plan.qmdPath), p), assetBytes[i]));
 
   // Includes are keyed by both project path and basename so shortcode args
   // like `_snippet.qmd` and `includes/_snippet.qmd` both resolve. When two

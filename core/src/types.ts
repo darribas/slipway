@@ -12,7 +12,13 @@ export interface RenderInputs {
   stylesheet: string; // raw text (SCSS or CSS); empty if no theme present
   stylesheetIsPrecompiled: boolean; // true for .css, false for .scss
   bib: string | null; // raw BibTeX (may be null)
-  assets: Map<string, Uint8Array>; // basename -> bytes (PNGs, JPGs, etc.)
+  /**
+   * Images and fonts the renderer inlines as data URIs. Keys are lookup
+   * names: buildRenderInputs() registers each file under its basename, its
+   * project path and its path relative to the deck; a hand-built map may use
+   * basenames only. Fonts are always matched by basename.
+   */
+  assets: Map<string, Uint8Array>;
   // Files available for {{< include path >}} resolution. Keyed by both the
   // project-relative path and the basename so the shortcode's argument can be
   // either form (preprocess.ts's expandIncludes tries basename first, then

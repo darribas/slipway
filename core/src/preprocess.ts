@@ -56,10 +56,19 @@ export function preprocessDeck(
 
   // 3. Rewrite image references to data URIs for any asset we've inlined.
   if (options.assetUris && options.assetUris.size > 0) {
+    // Resolve the reference as written first (deck-relative, e.g.
+    // `../assets/images/plate.jpg`), then forgivingly: with leading `../` and
+    // `assets/` stripped (`images/plate.jpg`), under `assets/`, and finally by
+    // basename — the lookup older decks rely on.
+    const uris = options.assetUris;
     qmd = qmd.replace(
-      /!\[([^\]]*)\]\(((?:\.\.\/)?(?:assets\/)?([^)\s]+))(\s+"[^"]*")?\)/g,
-      (match, alt: string, _full: string, file: string, title: string | undefined) => {
-        const uri = options.assetUris!.get(file);
+      /!\[([^\]]*)\]\(((?:\.\.\/)*(?:assets\/)?([^)\s]+))(\s+"[^"]*")?\)/g,
+      (match, alt: string, full: string, file: string, title: string | undefined) => {
+        const uri =
+          uris.get(full) ??
+          uris.get(file) ??
+          uris.get(`assets/${file}`) ??
+          uris.get(file.split("/").pop()!);
         if (!uri) return match;
         return `![${alt}](${uri}${title ?? ""})`;
       },

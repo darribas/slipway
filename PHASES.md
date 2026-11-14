@@ -1013,6 +1013,19 @@ The three bundled themes lived in the PWA's seed template (`app/src/templates/sl
 
 A pure move: goldens are byte-identical (not re-recorded). Bundle checked to carry every font under its old `assets/fonts/…` key. core 98, app 12, cli 26, vscode 42.
 
+### Increment 37: Images in `assets/` sub-folders are inlined (#49)
+
+`![](../assets/images/plate.jpg)` stayed a relative link in the rendered HTML — broken in the app preview (null-origin iframe) and anywhere the HTML travels alone (e.g. one `index.html` on GitHub Pages). Two halves of the cause: `buildRenderInputs` keyed assets by **basename**, while the markdown rewrite looked them up by the path left after stripping `../` and `assets/` (`images/plate.jpg`) — so anything in a sub-folder never matched; and basename keys made two same-named files in different folders collide.
+
+- `buildRenderInputs` now registers each image/font under three keys, least to most specific: basename (the old forgiving lookup — kept, and still what font `url()`s match), project path (`assets/images/plate.jpg`), and the path relative to the deck (`../assets/images/plate.jpg` from `demos/`). New exported helper `relativeTo(fromDir, to)`.
+- `preprocessDeck` resolves an image reference as written first, then forgivingly (stripped of any number of leading `../` and `assets/`, under `assets/`, by basename). The regex now accepts a `../../` chain.
+- `prepareRender` encodes each distinct file once (cache by bytes identity) — a file under three keys isn't base64'd three times — and feeds only basename keys to the font map.
+- `RenderInputs.assets` is documented as a lookup map; a hand-built basename-only map (as `app/test` builds) behaves as before.
+
+Tests (`render.test.ts`): the key set, `relativeTo`, and four inlining cases — sub-folder from `demos/`, beside-the-deck plus a `../../` chain, two `x.png` in different folders each resolving to its own bytes, and the forgiving forms. They fail on the old code. Goldens byte-identical (existing decks resolve to the same bytes). Checked end to end with the CLI: a `demos/` deck's `../assets/images/plate.jpg` comes out as a `data:image/jpeg` URI. core 103, app 12, cli 26, vscode 42.
+
+Still open from the issue's "related" notes: a theme's unused `@font-face` faces are inlined anyway, and there's no dedicated "export for the web" action (the rendered HTML is already a single self-contained file).
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)

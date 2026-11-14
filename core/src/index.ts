@@ -5,7 +5,7 @@
 
 export { finalizeRender, prepareRender, renderDeck, renderDeckSync } from "./render";
 export { buildPrintVariant } from "./print";
-export { buildRenderInputs, buildRenderInputsSync } from "./project";
+export { buildRenderInputs, buildRenderInputsSync, relativeTo } from "./project";
 export type { ProjectFS, ProjectFSSync } from "./project";
 export { createPandocInstance } from "./pandoc-core.js";
 export { createPandocInstanceSync } from "./pandoc-sync.js";
