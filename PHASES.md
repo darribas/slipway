@@ -997,7 +997,7 @@ Registered in `BUNDLED_THEMES` (`TRAVELOGUE`), so seed, top-up and export self-h
 
 Caught while rendering through the CLI: Slipway layers a theme over plain reveal.js, so Quarto's `$presentation-*` / `$font-family-sans-serif` variables alone left Source Sans, uppercase headings and the default title block. The theme sets base type, headings and `#title-slide` explicitly in `scss:rules`, which also holds under `quarto render`. Also: a `#`+`##` vertical stack is a wrapping `<section>`, so per-slide padding must skip `.stack` or it applies twice.
 
-Found, not fixed here: images in a subfolder of `assets/` aren't inlined (the renderer keys assets by basename, the markdown rewrite matches the path after `assets/`), so they stay relative links — why the showcase plate sits directly in `assets/`. `footer:` isn't rendered by Slipway. Tests: Travelogue catalog test, a no-shared-asset-paths test across all bundled themes, new `demo-travelogue-showcase` golden (existing goldens unchanged). 98 core / 12 app / 26 cli.
+Found, not fixed here (#49): images in a subfolder of `assets/` aren't inlined (the renderer keys assets by basename, the markdown rewrite matches the path after `assets/`), so they stay relative links — why the showcase plate sits directly in `assets/`. `footer:` isn't rendered by Slipway. Tests: Travelogue catalog test, a no-shared-asset-paths test across all bundled themes, new `demo-travelogue-showcase` golden (existing goldens unchanged). 98 core / 12 app / 26 cli.
 
 ## Repo cleanup (deferred)
 
