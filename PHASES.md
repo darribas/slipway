@@ -962,6 +962,16 @@ The merge's Deploy run (#40) failed at "Assemble the site". `deploy.yml` calls `
 
 After merging: re-download the three files from the a-Shell README (curl -L saves an error page silently; `head -c 40 ~/Documents/bin/slipway-ashell.js` should show `"use strict"`).
 
+### Increment 4.3b: a-Shell prints the script's result, not its console
+
+The first real run (Dani, after 4.6a published the files) printed only `jsc: Error in file ./bin/slipway-ashell.js : JavaScript execution returned a result of an unsupported type`. No version line came out.
+
+a-Shell's `executeJavascript` (`SceneDelegate.swift`) does nothing with `console`: it prints the completion value of `evaluateJavaScript`, and only if that value is a string or a number. Our bundle ended in an IIFE whose value is `undefined`, which WKWebView reports as an unsupported result type. Everything the adapter wrote with `console.log` / `console.error` was lost. The 4.2 spikes behaved the same way, but they also saved report files, and their results came from those, so this went unnoticed. The `node:vm` stand-in in `ashell.test.ts` captured `console` and ignored the completion value, so it tested the wrong channel.
+
+- `main.ts` collects every line it prints. An esbuild `footer` makes the bundle's last statement evaluate to that text and removes the temporary global it passed through.
+- `ashell.test.ts` now requires every run's completion value to be a string, as a-Shell does, and checks the printed text for `--version`, a usage error and a render.
+- README: output appears when a run ends. The first render (loading pandoc) is silent until it finishes.
+
 ### Increment 4.7: Manual iPad acceptance — pending (Dani)
 
 Not run yet; it needs things an agent can't do and that don't exist until this branch is merged.
