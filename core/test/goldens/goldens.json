@@ -11,6 +11,10 @@
     "sha256": "348f65c5fd511e6b792c0706f9db85d35393983e915a32e2f0f14f1e9cd4f7b6",
     "bytes": 999560
   },
+  "demo-travelogue-showcase": {
+    "sha256": "0e4f7c148843873f99fd484d4c9124c4213ee1500b2e1865c4b050655cf9d40a",
+    "bytes": 753765
+  },
   "imago-workshop": {
     "sha256": "92e6831ae04e8d632cb4990b951dd3cfffb286656e4681e3be708145e0d710e1",
     "bytes": 513395

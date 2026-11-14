@@ -84,6 +84,33 @@ describe("bundled-themes catalog", () => {
     }
   });
 
+  test("exposes Travelogue with assets/travelogue.scss + Fraunces/Courier Prime fonts + OFL licences", async () => {
+    const { TRAVELOGUE } = await import("../src/storage/bundled-themes");
+    expect(TRAVELOGUE.scss.path).toBe("assets/travelogue.scss");
+    const paths = TRAVELOGUE.assets.map((a) => a.path);
+    expect(paths).toContain("assets/fonts/fraunces/OFL.txt");
+    expect(paths).toContain("assets/fonts/fraunces/fraunces-latin-full-normal.woff2");
+    expect(paths).toContain("assets/fonts/fraunces/fraunces-latin-full-italic.woff2");
+    expect(paths).toContain("assets/fonts/courier-prime/OFL.txt");
+    for (const w of ["400-normal", "400-italic", "700-normal", "700-italic"]) {
+      expect(paths).toContain(`assets/fonts/courier-prime/courier-prime-latin-${w}.woff2`);
+    }
+    for (const asset of TRAVELOGUE.assets) {
+      expect(asset.read().byteLength).toBeGreaterThan(0);
+    }
+  });
+
+  test("no two bundled themes share an asset path", async () => {
+    const { BUNDLED_THEMES } = await import("../src/storage/bundled-themes");
+    const seen = new Set<string>();
+    for (const theme of BUNDLED_THEMES) {
+      for (const a of theme.assets) {
+        expect(seen.has(a.path), a.path).toBe(false);
+        seen.add(a.path);
+      }
+    }
+  });
+
   test("Figtree and ET Book asset paths don't overlap (one theme can be self-healed without dragging in the other)", async () => {
     const { IMAGO, JOURNAL } = await import("../src/storage/bundled-themes");
     const imago = new Set(IMAGO.assets.map((a) => a.path));

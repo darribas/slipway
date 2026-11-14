@@ -12,6 +12,9 @@ import imagoScss     from "../templates/slipway-demo/assets/imago.scss?raw";
 import journalScss   from "../templates/slipway-demo/assets/journal.scss?raw";
 import oflFigtree    from "../templates/slipway-demo/assets/fonts/figtree/OFL.txt?raw";
 import licenseEtBook from "../templates/slipway-demo/assets/fonts/et-book/LICENSE.txt?raw";
+import travelogueScss  from "../templates/slipway-demo/assets/travelogue.scss?raw";
+import oflFraunces     from "../templates/slipway-demo/assets/fonts/fraunces/OFL.txt?raw";
+import oflCourierPrime from "../templates/slipway-demo/assets/fonts/courier-prime/OFL.txt?raw";
 import seedFonts     from "virtual:seed-fonts";
 
 export interface BundledFile {
@@ -69,7 +72,17 @@ export const JOURNAL: BundledTheme = {
   ],
 };
 
-export const BUNDLED_THEMES: ReadonlyArray<BundledTheme> = [IMAGO, JOURNAL];
+export const TRAVELOGUE: BundledTheme = {
+  scss: textFile("assets/travelogue.scss", travelogueScss),
+  assets: [
+    textFile("assets/fonts/fraunces/OFL.txt", oflFraunces),
+    ...fontsUnder("fraunces"),
+    textFile("assets/fonts/courier-prime/OFL.txt", oflCourierPrime),
+    ...fontsUnder("courier-prime"),
+  ],
+};
+
+export const BUNDLED_THEMES: ReadonlyArray<BundledTheme> = [IMAGO, JOURNAL, TRAVELOGUE];
 
 /** Every bundled file across all themes: SCSS + fonts + licences. */
 export function allBundledFiles(): BundledFile[] {

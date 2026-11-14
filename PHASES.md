@@ -984,6 +984,21 @@ Results to be recorded here when they come back.
 
 -----
 
+### Increment 35: Bundled Travelogue theme
+
+A third bundled theme, `assets/travelogue.scss`, next to Imago and Journal: sepia paper, near-black ink, a seal-red accent, typed-notes feel (after the And Other Stories cover of *Taiwan Travelogue*). Headings in Fraunces at display size; body in Courier Prime (`$body-style: "typed"`, default) or Fraunces' own text cut (`"print"`) — Newsreader was tried for "print" and dropped to keep the deck to one serif. A slide can switch alone with `## Title {.print}` / `{.typed}`.
+
+- **Page**: asymmetric, like a printed page — content in a left text column (`$text-measure`, 75%) under a top margin (`$page-top`), wide right margin. `# Section` dividers set low on the page.
+- **Images**: greyscaled and multiplied onto the paper, hairline edge, typed plate captions. `:::: {.columns}` for text-left/image-right; `{.right}` places a lone image in the margin (absolutely positioned beside the text, which narrows to `$text-measure-beside-image`); `{.wide}` spans the page; `{.colour}` / `{.full}` opt out of the treatment. Uses `:has()` (Safari 15.4+).
+- **Marking**: `[x]{.mark}` highlighter (aliased `.hlg`, so Imago decks keep theirs), `[x]{.ul}` red-pencil underline (pandoc emits `<u>`), `[x]{.red}`; `::: {.passage}` running text; `::: {.note}`.
+- **Fonts** self-hosted under `assets/fonts/{fraunces,courier-prime}/` (latin woff2 from Fontsource, OFL.txt each); no network `@import`.
+
+Registered in `BUNDLED_THEMES` (`TRAVELOGUE`), so seed, top-up and export self-heal cover it. New `BUNDLED_DEMOS` list in `seed.ts` ships `demos/travelogue-showcase.qmd` and its plate (`assets/travelogue-plate.svg` — SVG so it is a `?raw` text import and inlines as a data URI) to new *and* existing installs; kept out of the theme catalog so export self-heal never adds a demo deck. `BUNDLED_VERSION` → 2.
+
+Caught while rendering through the CLI: Slipway layers a theme over plain reveal.js, so Quarto's `$presentation-*` / `$font-family-sans-serif` variables alone left Source Sans, uppercase headings and the default title block. The theme sets base type, headings and `#title-slide` explicitly in `scss:rules`, which also holds under `quarto render`. Also: a `#`+`##` vertical stack is a wrapping `<section>`, so per-slide padding must skip `.stack` or it applies twice.
+
+Found, not fixed here: images in a subfolder of `assets/` aren't inlined (the renderer keys assets by basename, the markdown rewrite matches the path after `assets/`), so they stay relative links — why the showcase plate sits directly in `assets/`. `footer:` isn't rendered by Slipway. Tests: Travelogue catalog test, a no-shared-asset-paths test across all bundled themes, new `demo-travelogue-showcase` golden (existing goldens unchanged). 98 core / 12 app / 26 cli.
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)
@@ -1038,13 +1053,3 @@ Relative URLs in the built HTML resolve correctly under any subpath, so the buil
 Deployed footprint since Phase 4: **~153 MB** — the PWA (~62 MB: 58 MB `pandoc.wasm` + 4 MB JS), the extension (~60 MB: its own copy of `pandoc.wasm` + 4.2 MB JS) and the CLI tarball (17.6 MB, the wasm compressed inside it). Pages limits: 100 MB/file, 1 GB/site — well under both. The a-Shell adapter (4.3) adds a third raw `pandoc.wasm` plus its 4.2 MB script under `cli/`, for **~215 MB** in all.
 
 Soft bandwidth cap is 100 GB/month. The PWA costs bandwidth once per visitor (hashed assets, then the service worker). **The extension is the new cost**: VS Code for the Web re-fetches an extension installed from a URL on every launch, and `pandoc.wasm` is 58 MB raw. If Pages serves it gzip-compressed (as it does `application/wasm` for the PWA; ~16 MB on the wire) that is roughly 6,000 launches a month; uncompressed, about 1,700. Whether the browser's HTTP cache turns repeat launches into cheap revalidations inside VS Code for the Web / Blink Code is not known yet — to be observed in the 4.7 iPad run (Blink relaunch timing with and without a warm cache). For one author this is a non-issue either way; it only matters if the extension gets many users.
-
-### Theme drop: Travelogue (draft, not yet registered)
-
-A third theme, `assets/travelogue.scss`, alongside Imago and Journal: sepia paper, near-black ink, seal-red accent; Fraunces headings, body in Courier Prime ("typed") or Fraunces at its text optical size ("print") via `$body-style` (Newsreader was tried for "print" and dropped, to keep the deck to one serif). Highlights: `[x]{.mark}` highlighter (also aliased as `.hlg` so Imago decks keep theirs), `[x]{.ul}` red-pencil underline (pandoc emits `<u>`), `[x]{.red}`; `::: {.passage}` for running text; images greyscaled and multiplied onto the paper with mono plate captions. Fonts self-hosted under `assets/fonts/{fraunces,courier-prime}/` (latin woff2 from Fontsource, OFL.txt each), no network `@import`. Demo deck: `demos/travelogue.qmd`.
-
-Page layout is asymmetric, like a printed page: everything sits in a left-hand text column (`$text-measure`, 75%; narrows to 58% on slides with a `{.right}` image) with a wide right margin. Images step into it two ways — `:::: {.columns}` (text left, image right; column widths override the measure) or `{.right}` on a lone image, which is absolutely positioned beside the text and clears a one-line `##` title (long titles: use columns). `{.wide}` spans the page. Relies on `:has()` (Safari 15.4+).
-
-Caught while rendering through the CLI: Slipway layers the theme over plain reveal.js, so Quarto's `$presentation-*` / `$font-family-sans-serif` variables alone left Source Sans, uppercase headings and the default title block. The theme now sets base type, headings and `#title-slide` explicitly in `scss:rules`, which also holds under `quarto render`.
-
-Deferred: not in `BUNDLED_THEMES` / seed yet (no tests, no golden); the fonts nonetheless land in `virtual:seed-fonts` (~0.36 MB more base64 in the app bundle) because that plugin collects everything under `assets/fonts/`. Register it — or move it out of the seed tree — before merging to `main`. `footer:` isn't rendered by Slipway (pre-existing).

@@ -9,13 +9,16 @@
 //   - seedIfEmpty(): first-run only (gated on the .seeded marker). Writes the
 //     whole template.
 //   - topUpBundledThemes(): runs every launch. Non-destructively adds any
-//     bundled theme files (imago/journal + their fonts + licences) that aren't
+//     bundled theme files (imago/journal/travelogue + their fonts + licences,
+//     and the showcase decks that came with later themes) that aren't
 //     already present, so EXISTING installs receive themes shipped after they
 //     first seeded — without clobbering the user's deck or edits.
 
 import slideQmd      from "../templates/slipway-demo/demos/slide.qmd?raw";
 import snippetQmd    from "../templates/slipway-demo/demos/_snippet.qmd?raw";
 import showcaseQmd   from "../templates/slipway-demo/demos/imago-showcase.qmd?raw";
+import travelogueQmd from "../templates/slipway-demo/demos/travelogue-showcase.qmd?raw";
+import travelogueSvg from "../templates/slipway-demo/assets/travelogue-plate.svg?raw";
 import themeScss     from "../templates/slipway-demo/theme.scss?raw";
 import referencesBib from "../templates/slipway-demo/references.bib?raw";
 
@@ -31,7 +34,16 @@ const SEED_MARKER = ".seeded";
 // intended trade — top-up never resurrects a file the user removed in the
 // current generation.
 const BUNDLED_MARKER = ".bundled-themes";
-const BUNDLED_VERSION = "1";
+const BUNDLED_VERSION = "2";   // 2: Travelogue theme + its showcase deck
+
+// Showcase decks shipped with a bundled theme after the first seed. Written by
+// both seedIfEmpty() and topUpBundledThemes() (never overwriting), so existing
+// installs get them too. Kept out of the theme catalog on purpose: zip.ts
+// self-heals exports from that catalog, and a demo deck has no place there.
+const BUNDLED_DEMOS: ReadonlyArray<{ path: string; text: string }> = [
+  { path: "demos/travelogue-showcase.qmd", text: travelogueQmd },
+  { path: "assets/travelogue-plate.svg", text: travelogueSvg },
+];
 
 // Write every bundled theme file that isn't already present. Returns the paths
 // actually written. Never overwrites an existing file, so a user's edited
@@ -42,6 +54,12 @@ async function writeMissingBundledFiles(): Promise<string[]> {
     if (!(await exists(file.path))) {
       await writeBytes(file.path, file.read());
       written.push(file.path);
+    }
+  }
+  for (const demo of BUNDLED_DEMOS) {
+    if (!(await exists(demo.path))) {
+      await writeText(demo.path, demo.text);
+      written.push(demo.path);
     }
   }
   return written;
@@ -58,8 +76,8 @@ export async function seedIfEmpty(): Promise<boolean> {
   await writeText("demos/imago-showcase.qmd", showcaseQmd);
   await writeText("assets/theme.scss", themeScss);
   await writeText("assets/references.bib", referencesBib);
-  // Bundled themes + self-hosted fonts: switch with `theme: assets/imago.scss`
-  // or `theme: assets/journal.scss` and render offline.
+  // Bundled themes + self-hosted fonts: switch with `theme: assets/imago.scss`,
+  // `assets/journal.scss` or `assets/travelogue.scss` and render offline.
   await writeMissingBundledFiles();
   await writeText(BUNDLED_MARKER, BUNDLED_VERSION);
   await writeText(SEED_MARKER, new Date().toISOString());

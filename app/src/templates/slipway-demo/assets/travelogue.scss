@@ -23,6 +23,7 @@ $accent:    #b23a26;   // seal red: links, red-pencil underlines
 $highlight: #e8c95a;   // highlighter ochre, multiplied onto the paper
 
 // ---- page layout: text keeps to a column on the left, the right is margin
+$page-top:     52px;   // space above the first line (slide is 960×700)
 $page-left:    2.5%;   // inset from the slide's left edge
 $text-measure: 75%;    // width of the text column; the rest is right margin
 $text-measure-beside-image: 58%;  // text column on slides with a {.right} image
@@ -142,7 +143,13 @@ $code-color: $ink;
 
 // ---- asymmetric page: everything set in a left-hand text column, leaving
 // a wide right margin. Images can step out into it (see below).
-.reveal .slides section { padding-left: $page-left; box-sizing: border-box; }
+.reveal .slides section {
+  padding-top: $page-top;
+  padding-left: $page-left;
+  box-sizing: border-box;
+}
+// a vertical stack (`#` + `##` slides) is only a wrapper: don't pad it twice
+.reveal .slides section.stack { padding: 0; }
 .reveal .slides section > :is(h1, h2, h3, h4, p, ul, ol, dl, blockquote, table, figure, .passage, .note, .quarto-figure),
 .reveal #title-slide > * {
   max-width: $text-measure;
@@ -169,14 +176,14 @@ $heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
 }
 .reveal .slides section > :is(figure, p):has(> img.right) {
   position: absolute;
-  top: 0;
+  top: $page-top;
   right: 0;
   width: calc(100% - #{$page-left} - #{$text-measure-beside-image} - #{$column-gap});
   max-width: none;
   margin: 0;
 }
 .reveal .slides section:has(> h2:not(:empty)) > :is(figure, p):has(> img.right) {
-  top: $heading-block;
+  top: calc(#{$page-top} + #{$heading-block});
 }
 .reveal img.right { max-width: 100%; margin: 0; }
 // an image spanning the whole page: ![cap](x.jpg){.wide}
@@ -190,13 +197,30 @@ $heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
 
 // "print": Fraunces at its text optical size — sturdier, lower contrast,
 // no wonky forms — so headings (opsz 144, WONK 1) still stand apart.
-@if $body-style == "print" {
-  .reveal p, .reveal li, .reveal figcaption, .reveal .caption,
-  .reveal #title-slide .subtitle, .reveal #title-slide .author,
-  .reveal #title-slide .date, .reveal .note {
-    font-variation-settings: "opsz" 14, "SOFT" 0, "WONK" 0;
+// The deck-wide default comes from $body-style; a single slide can switch
+// with `## Title {.print}` or `## Title {.typed}`.
+@mixin print-body {
+  font-family: $print-font;
+  @if $body-style != "print" { font-size: 106%; }   // print body sets a touch larger
+  @each $sel in (p, li, figcaption, ".caption", ".note", ".subtitle", ".author", ".date") {
+    #{$sel} {
+      font-family: $print-font;
+      font-variation-settings: "opsz" 14, "SOFT" 0, "WONK" 0;
+    }
   }
 }
+@mixin typed-body {
+  font-family: $typed-font;
+  @if $body-style == "print" { font-size: 94%; }
+  @each $sel in (p, li, figcaption, ".caption", ".note", ".subtitle", ".author", ".date") {
+    #{$sel} { font-family: $typed-font; font-variation-settings: normal; }
+  }
+}
+@if $body-style == "print" {
+  .reveal .slides { @include print-body; }
+}
+.reveal .slides section.print { @include print-body; }
+.reveal .slides section.typed { @include typed-body; }
 
 // ---- highlights
 // [text]{.mark} or <mark>: a highlighter swipe across the lower part of the line.
@@ -232,7 +256,7 @@ $heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
 
 // ---- title slide: like a typed title page
 // (pandoc/Slipway markup: #title-slide > h1.title, p.subtitle/.author/.date)
-.reveal #title-slide { padding-top: 22vh; }
+.reveal #title-slide { padding-top: 190px; }
 .reveal #title-slide .title {
   font-size: 2.8em;
   margin-bottom: 0.15em;
@@ -249,6 +273,12 @@ $heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
   font-size: 0.7em;
   color: $faded;
   margin: 0;
+}
+// section divider slides (`# Heading`): set low on the page, like a part title
+.reveal .slides section.title-slide.level1:not(#title-slide) { padding-top: 260px; }
+.reveal .slides section.title-slide.level1:not(#title-slide) h1 {
+  font-size: 2.2em;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
 }
 // (Quarto markup)
 .reveal .quarto-title-block { text-align: left; }
