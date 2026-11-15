@@ -155,6 +155,21 @@ $code-color: $ink;
   max-width: $text-measure;
 }
 
+// `## {.vcentre}`: centre the slide's content vertically, whatever the
+// deck's `center:` setting (an image alone on a slide, a lone quote).
+// reveal.js writes `display: block` / `display: none` inline on each slide,
+// so only the shown one is switched to flex; hidden slides stay hidden.
+// The empty `##` that carries the class takes no space.
+.reveal .slides section.vcentre[style*="display: block"] {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  // balance the top margin so "centre" is the middle of the page
+  padding-bottom: $page-top;
+}
+.reveal .slides section.vcentre > :is(h1, h2, h3):empty { display: none; }
+
 // two columns: text left, image right — the column widths win over the
 // measure. :::: {.columns} / ::: {.column width="55%"} as in Quarto.
 .reveal .columns {

@@ -92,6 +92,10 @@ text column narrows to make room.
 
 ![fig. 3 — `{.wide}` spans the page; `{.colour}` keeps colour; `{.full}` drops the edge](../assets/travelogue-plate.svg){.wide width=70%}
 
+## {.vcentre}
+
+![fig. 4 — alone on the page: `## {.vcentre}` centres it vertically](../assets/travelogue-plate.svg){width=50%}
+
 # Tuning it
 
 ## The knobs

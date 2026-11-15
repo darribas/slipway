@@ -1036,6 +1036,14 @@ Setting up a deck in a-Shell meant one long multi-line `curl` (theme, eight font
 
 Untested on the device itself: a-Shell's `sh` is dash, as on the CI runner, but the first real run on the iPad is the acceptance check.
 
+### Increment 39: Travelogue `{.vcentre}` slide class
+
+Travelogue decks set `center: false` (slides read like typed notes, top-aligned), which leaves a lone image or quote stranded at the top of its slide. `## {.vcentre}` now centres one slide's content vertically, under either `center:` setting.
+
+- reveal.js writes `display: block` / `display: none` inline on every slide, so a plain `display: flex` loses. The rule is `section.vcentre[style*="display: block"] { display: flex !important; … }`, keyed on the shown slides so `!important` can never un-hide one. `padding-bottom: $page-top` balances the top margin, so "centre" is the page's middle. The empty `##` that carries the class is hidden (`:empty`).
+- Checked in headless Chromium at 1280×720: a 50%-wide figure's midpoint at 360px under both `center: false` and `center: true`; neighbouring slides unchanged.
+- Showcase gains a fig. 4 slide using it (golden `demo-travelogue-showcase` re-recorded; no other golden moved). `core/test/render.test.ts` locks the class on the section and the `[style*="display: block"]` / `!important` / `:empty` rules.
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)

@@ -345,6 +345,29 @@ describe("seeded Journal theme", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Travelogue theme — slide classes
+// ---------------------------------------------------------------------------
+
+describe("Travelogue theme", () => {
+  test("`## {.vcentre}` tags the slide and the theme flex-centres only shown slides", async () => {
+    const scss = await readFile(resolve(DEMO, "assets/travelogue.scss"), "utf8");
+    const { html } = await renderDeck(pandoc, {
+      qmd: "---\ntitle: V\n---\n\n## {.vcentre}\n\nAlone on the page.\n",
+      stylesheet: scss,
+      stylesheetIsPrecompiled: false,
+      bib: null,
+      assets: new Map(),
+      includes: new Map(),
+    });
+    expect(html).toMatch(/<section[^>]*class="[^"]*\bvcentre\b/);
+    // reveal.js sets display inline on every slide; the rule must key on the
+    // shown ones (display: block) so `!important` never un-hides a slide.
+    expect(html).toMatch(/section\.vcentre\[style\*="display: block"\]\s*\{[^}]*display:\s*flex\s*!important/);
+    expect(html).toMatch(/section\.vcentre\s*>\s*:is\(h1,\s*h2,\s*h3\):empty\s*\{[^}]*display:\s*none/);
+  }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
 // Font-URL inlining (unit)
 // ---------------------------------------------------------------------------
 
