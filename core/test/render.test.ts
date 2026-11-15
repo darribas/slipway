@@ -365,6 +365,21 @@ describe("Travelogue theme", () => {
     expect(html).toMatch(/section\.vcentre\[style\*="display: block"\]\s*\{[^}]*display:\s*flex\s*!important/);
     expect(html).toMatch(/section\.vcentre\s*>\s*:is\(h1,\s*h2,\s*h3\):empty\s*\{[^}]*display:\s*none/);
   }, 30_000);
+
+  test("`{.side}` on an image lays its figure out as image + margin caption", async () => {
+    const scss = await readFile(resolve(DEMO, "assets/travelogue.scss"), "utf8");
+    const { html } = await renderDeck(pandoc, {
+      qmd: "---\ntitle: S\n---\n\n## S\n\n![fig. 1 — beside](x.png){.side}\n",
+      stylesheet: scss,
+      stylesheetIsPrecompiled: false,
+      bib: null,
+      assets: new Map(),
+      includes: new Map(),
+    });
+    expect(html).toMatch(/<img[^>]*class="side"[^>]*>\s*<figcaption[^>]*>fig\.\s1 — beside<\/figcaption>/);
+    expect(html).toMatch(/figure:has\(>\s*img\.side\)\s*\{[^}]*display:\s*flex[^}]*align-items:\s*flex-end/);
+    expect(html).toMatch(/figure\s*>\s*img\.side\s*\{[^}]*max-width:\s*75%/);
+  }, 30_000);
 });
 
 // ---------------------------------------------------------------------------

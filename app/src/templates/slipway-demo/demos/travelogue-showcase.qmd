@@ -96,6 +96,12 @@ text column narrows to make room.
 
 ![fig. 4 — alone on the page: `## {.vcentre}` centres it vertically](../assets/travelogue-plate.svg){width=50%}
 
+## A caption in the margin
+
+With `{.side}` the caption moves beside the image, into the right-hand margin, aligned with its foot.
+
+![fig. 5 — the plate again; `{.side}` sets this caption in the margin, Tufte-style](../assets/travelogue-plate.svg){.side width=50%}
+
 # Tuning it
 
 ## The knobs
