@@ -1044,6 +1044,14 @@ Travelogue decks set `center: false` (slides read like typed notes, top-aligned)
 - Checked in headless Chromium at 1280×720: a 50%-wide figure's midpoint at 360px under both `center: false` and `center: true`; neighbouring slides unchanged.
 - Showcase gains a fig. 4 slide using it (golden `demo-travelogue-showcase` re-recorded; no other golden moved). `core/test/render.test.ts` locks the class on the section and the `[style*="display: block"]` / `!important` / `:empty` rules.
 
+### Increment 40: Travelogue `{.side}` — Tufte-style margin captions
+
+`![fig. 1 — caption](x.jpg){.side}` sets the caption beside the image, in the right-hand margin, aligned with the image's foot — instead of under it.
+
+- The figure becomes a flex row (`align-items: flex-end`, 2.5% gap); the image is `flex: none` and capped at the text column (`$text-measure`), the caption takes up to 14em of what remains. Flex rather than a fixed two-column grid so the caption follows the image's actual edge: with a grid, `width=55%` left a gap between a shrunken image and a caption pinned at the column line. `width=` therefore stays a share of the page, as on any other image.
+- Checked in headless Chromium at 1280×720: caption and image feet coincide (with and without `width=`, and inside `## {.vcentre}`).
+- Showcase gains a fig. 5 slide (golden `demo-travelogue-showcase` re-recorded; no other golden moved); `render.test.ts` locks the markup and the flex/cap rules. Note for tests: pandoc emits a non-breaking space after "fig.", so match it with `\s`.
+
 ## Repo cleanup (deferred)
 
 Small tidy-ups to land at the next natural stopping point — none are blocking, all are bookkeeping. (`phase0/` removal and KaTeX inlining were cleared — see increments 25 and 22.)

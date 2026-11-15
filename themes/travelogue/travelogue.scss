@@ -340,6 +340,23 @@ $heading-block: 1.7em * (1.1 + 0.35 + 1);   // h2: line + padding + margin
 .reveal .quarto-figure-center > figure > p,
 .reveal .quarto-figure-center > figure > figcaption { text-align: left; }
 
+// ---- side captions, Tufte-style: ![fig. 1 — caption](x.jpg){.side}
+// The caption sits just right of the image, in what's left of the page,
+// aligned with the image's foot. The image is capped at the text column;
+// `width=` on it is a share of the page, as on any other image.
+.reveal .slides section > figure:has(> img.side) {
+  max-width: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5%;
+}
+.reveal figure > img.side { flex: none; max-width: $text-measure; margin: 0; }
+.reveal figure:has(> img.side) > figcaption {
+  flex: 0 1 14em;
+  margin: 0;
+  line-height: 1.4;
+}
+
 // ---- a block of running text, like the cover passage
 // ::: {.passage} ... :::
 .reveal .passage {
