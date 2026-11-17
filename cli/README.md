@@ -25,6 +25,28 @@ command with the new version number (the current one is shown at
 the project's [GitHub Releases](https://github.com/darribas/slipway/releases)
 (tags `cli-v*`).
 
+## Start a new deck
+
+`new-deck.sh` sets up a folder with a bundled theme (Travelogue, Imago or
+Journal), its fonts and a starter `deck.qmd` that already points at the
+theme. Travelogue and Imago also get a `showcase.qmd` showing everything the
+theme can do. It is plain POSIX `sh`, so it runs on a desktop shell as well
+as in a-Shell:
+
+```sh
+curl -L -O https://darribas.github.io/slipway/cli/new-deck.sh
+sh new-deck.sh mytalk                # Travelogue (the default)
+sh new-deck.sh mytalk journal        # or: imago, journal
+cd mytalk
+slipway render deck.qmd
+```
+
+It refuses to overwrite an existing folder. The theme is copied into the
+deck's `assets/`, so later theme updates don't reach an existing deck: run
+the script again into a new folder, or curl the theme's `.scss` from
+`https://raw.githubusercontent.com/darribas/slipway/main/themes/<name>/`
+into `assets/`. On iPad, see [README-ashell.md](README-ashell.md#start-a-new-deck).
+
 ## Use
 
 ```sh
