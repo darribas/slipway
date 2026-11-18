@@ -1106,3 +1106,14 @@ Relative URLs in the built HTML resolve correctly under any subpath, so the buil
 Deployed footprint since Phase 4: **~153 MB** — the PWA (~62 MB: 58 MB `pandoc.wasm` + 4 MB JS), the extension (~60 MB: its own copy of `pandoc.wasm` + 4.2 MB JS) and the CLI tarball (17.6 MB, the wasm compressed inside it). Pages limits: 100 MB/file, 1 GB/site — well under both. The a-Shell adapter (4.3) adds a third raw `pandoc.wasm` plus its 4.2 MB script under `cli/`, for **~215 MB** in all.
 
 Soft bandwidth cap is 100 GB/month. The PWA costs bandwidth once per visitor (hashed assets, then the service worker). **The extension is the new cost**: VS Code for the Web re-fetches an extension installed from a URL on every launch, and `pandoc.wasm` is 58 MB raw. If Pages serves it gzip-compressed (as it does `application/wasm` for the PWA; ~16 MB on the wire) that is roughly 6,000 launches a month; uncompressed, about 1,700. Whether the browser's HTTP cache turns repeat launches into cheap revalidations inside VS Code for the Web / Blink Code is not known yet — to be observed in the 4.7 iPad run (Blink relaunch timing with and without a warm cache). For one author this is a non-issue either way; it only matters if the extension gets many users.
+
+### Increment 42: inline the images the image regex missed (#56)
+
+A real deck rendered with every PNG embedded but one. Three kinds of reference slipped past the single `![…](…)` regex in `core/src/preprocess.ts` and stayed relative links:
+
+- **Brackets in the caption** — `![fig. 1 — Openshaw [-@openshaw1994]](…)` or a `[link](…)`: the alt text was `[^\]]*`, so it stopped at the first `]`. Now one level of balanced brackets is allowed.
+- **Slide backgrounds** — `{background-image="…"}` was never rewritten. Now quoted, single-quoted and bare values are, through the same lookup.
+- **Spaces in file names** — the `<path with spaces>` destination form, and `%20`-encoded paths (tried decoded after the literal lookup).
+
+The lookup chain (as written → `../`/`assets/` stripped → under `assets/` → basename) moved into one `assetLookup()` helper shared by both rewrites. Remote URLs and unknown paths are left untouched. Four tests in `render.test.ts` ("image inlining (#56)"); no golden moved. Still not inlined, by design or for later: raw-HTML `<img src>`, and YAML-level images (`logo:`, `title-slide-attributes`).
+

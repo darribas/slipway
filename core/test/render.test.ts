@@ -744,6 +744,53 @@ describe("buildRenderInputs", () => {
     });
   });
 
+  // #56: references the old single regex missed.
+  describe("image inlining (#56)", () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x03]);
+    const uri = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+    const stdinFor = async (md: string, files: Record<string, Uint8Array> = { "assets/plate.png": png }) =>
+      prepareRender(await buildRenderInputs("deck.qmd", memProjectFS({
+        "deck.qmd": `---\ntitle: T\n---\n\n${md}\n`,
+        ...files,
+      }))).stdin;
+
+    test("captions holding a citation or a link", async () => {
+      const stdin = await stdinFor(
+        "## A\n\n![fig. 1 — Openshaw [-@openshaw1994]](assets/plate.png){.side}\n\n" +
+        "## B\n\n![see [the paper](https://example.org)](assets/plate.png \"t\")",
+      );
+      expect(stdin).toContain(`![fig. 1 — Openshaw [-@openshaw1994]](${uri}){.side}`);
+      expect(stdin).toContain(`![see [the paper](https://example.org)](${uri} "t")`);
+      expect(stdin).not.toContain("assets/plate.png");
+    });
+
+    test("slide background-image, quoted, single-quoted or bare", async () => {
+      const stdin = await stdinFor(
+        '## A {background-image="assets/plate.png"}\n\n' +
+        "## B {background-image='plate.png' background-size=contain}\n\n" +
+        "## C {background-image=assets/plate.png}",
+      );
+      expect(stdin).toContain(`## A {background-image="${uri}"}`);
+      expect(stdin).toContain(`## B {background-image="${uri}" background-size=contain}`);
+      expect(stdin).toContain(`## C {background-image="${uri}"}`);
+    });
+
+    test("file names with spaces: angle-bracket and percent-encoded references", async () => {
+      const stdin = await stdinFor(
+        "## A\n\n![a](<assets/my plate.png>)\n\n## B\n\n![b](assets/my%20plate.png)",
+        { "assets/my plate.png": png },
+      );
+      expect(stdin).toContain(`![a](${uri})`);
+      expect(stdin).toContain(`![b](${uri})`);
+    });
+
+    test("unknown references and remote URLs are left alone", async () => {
+      const md = "## A {background-image=\"https://example.org/x.png\"}\n\n![x](assets/missing.png)\n\n![y](<assets/no such.png>)";
+      const stdin = await stdinFor(md);
+      expect(stdin).toContain(md);
+    });
+  });
+
   test("include candidates are keyed by path and basename, excluding the deck", async () => {
     const inputs = await buildRenderInputs("demos/deck.qmd", memProjectFS({
       "demos/deck.qmd": deck(""),
