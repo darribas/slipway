@@ -56,21 +56,27 @@ export function preprocessDeck(
 
   // 3. Rewrite image references to data URIs for any asset we've inlined.
   if (options.assetUris && options.assetUris.size > 0) {
-    // Resolve the reference as written first (deck-relative, e.g.
-    // `../assets/images/plate.jpg`), then forgivingly: with leading `../` and
-    // `assets/` stripped (`images/plate.jpg`), under `assets/`, and finally by
-    // basename — the lookup older decks rely on.
-    const uris = options.assetUris;
+    const lookup = assetLookup(options.assetUris);
+
+    // `![alt](dest "title")`. The alt text may hold one level of brackets —
+    // a citation `[@key]` or a `[link](…)` in a caption (#56). The
+    // destination is either `<a path with spaces>` or a bare path.
     qmd = qmd.replace(
-      /!\[([^\]]*)\]\(((?:\.\.\/)*(?:assets\/)?([^)\s]+))(\s+"[^"]*")?\)/g,
-      (match, alt: string, full: string, file: string, title: string | undefined) => {
-        const uri =
-          uris.get(full) ??
-          uris.get(file) ??
-          uris.get(`assets/${file}`) ??
-          uris.get(file.split("/").pop()!);
+      /!\[((?:[^[\]]|\[[^[\]]*\])*)\]\((?:<([^>\n]+)>|([^)\s]+))(\s+"[^"]*")?\)/g,
+      (match, alt: string, angled: string | undefined, bare: string | undefined, title: string | undefined) => {
+        const uri = lookup(angled ?? bare!);
         if (!uri) return match;
         return `![${alt}](${uri}${title ?? ""})`;
+      },
+    );
+
+    // Slide backgrounds: `## Title {background-image="assets/x.png"}`,
+    // quoted or bare (#56).
+    qmd = qmd.replace(
+      /(\bbackground-image=)(?:"([^"]+)"|'([^']+)'|([^\s"'}]+))/g,
+      (match, key: string, dq: string | undefined, sq: string | undefined, bare: string | undefined) => {
+        const uri = lookup(dq ?? sq ?? bare!);
+        return uri ? `${key}"${uri}"` : match;
       },
     );
   }
@@ -106,4 +112,32 @@ function expandIncludes(qmd: string, includes: Map<string, string>): string {
     const basename = path.split("/").pop() ?? path;
     return includes.get(basename) ?? includes.get(path) ?? `<!-- include ${path} not found -->`;
   });
+}
+
+/**
+ * Resolve an image reference against the inlined assets: as written
+ * (deck-relative, e.g. `../assets/images/plate.jpg`), then forgivingly — with
+ * leading `../` and `assets/` stripped (`images/plate.jpg`), under `assets/`,
+ * and finally by basename, the lookup older decks rely on. A percent-encoded
+ * reference (`my%20plate.png`) is also tried decoded.
+ */
+function assetLookup(uris: Map<string, string>): (ref: string) => string | undefined {
+  const tryOne = (ref: string): string | undefined => {
+    const file = ref.replace(/^(?:\.\.\/)*(?:assets\/)?/, "");
+    return (
+      uris.get(ref) ??
+      uris.get(file) ??
+      uris.get(`assets/${file}`) ??
+      uris.get(file.split("/").pop()!)
+    );
+  };
+  return (ref) => {
+    const hit = tryOne(ref);
+    if (hit || !ref.includes("%")) return hit;
+    try {
+      return tryOne(decodeURIComponent(ref));
+    } catch {
+      return undefined;
+    }
+  };
 }
